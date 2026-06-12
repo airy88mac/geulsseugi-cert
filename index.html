@@ -480,8 +480,9 @@
       targetCtx.drawImage(blurred, 0, titleH, w, h - titleH, 0, titleH, w, h - titleH);
     } else {
       const boxW = Math.round(w * boxWidthRatio);
+      const boxX = Math.round((w - boxW) / 2);   // 가운데 정렬 → 양쪽이 함께 줄어듦
       targetCtx.fillStyle = boxColor;
-      targetCtx.fillRect(0, titleH, boxW, h - titleH);
+      targetCtx.fillRect(boxX, titleH, boxW, h - titleH);
     }
 
     drawComment(targetCtx, image, w, h, titleH);
@@ -578,7 +579,7 @@
     const maxW    = regionW * 0.86;
     const lineH   = fontPx * 1.32;
     const lines   = wrapLines(targetCtx, text, maxW);
-    const cx = regionW / 2;
+    const cx = w / 2;   // 박스가 가운데 정렬이므로 항상 이미지 중앙
     const cy = (titleH + h) / 2;
     let y = cy - (lines.length - 1) * lineH / 2;
     for (const ln of lines) {
