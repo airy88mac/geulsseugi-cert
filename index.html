@@ -101,6 +101,47 @@
       border-radius: 9px;
     }
 
+    /* 상단 자르기 선 (파란색) */
+    .crop-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: #35a7ff;
+      cursor: ns-resize;
+      touch-action: none;
+      z-index: 11;
+    }
+    .crop-line::after {
+      content: '✂️ 상단 자르기 — 드래그';
+      position: absolute;
+      left: 10px;
+      top: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #35a7ff;
+      background: rgba(0,0,0,0.75);
+      padding: 3px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .crop-pill {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 18px;
+      background: #35a7ff;
+      border-radius: 9px;
+    }
+    .crop-overlay {
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      background: rgba(0,0,0,0.55);
+      pointer-events: none;
+      z-index: 9;
+    }
+
     /* ── 컨트롤 ── */
     .controls {
       width: 100%;
@@ -243,6 +284,9 @@
 
 <div class="canvas-wrap" id="canvasWrap">
   <canvas id="canvas"></canvas>
+  <div class="crop-line" id="cropLine">
+    <div class="crop-pill"></div>
+  </div>
   <div class="drag-line" id="dragLine">
     <div class="drag-pill"></div>
   </div>
@@ -279,10 +323,16 @@
     <input type="range" id="fontSlider" min="16" max="120" value="48">
     <div class="card-label" style="margin-top:6px">글자 색상</div>
     <div class="color-row">
-      <button class="text-color-btn active" data-tcolor="#fff"     style="background:#fff;"></button>
-      <button class="text-color-btn"        data-tcolor="#000"     style="background:#000;"></button>
-      <button class="text-color-btn"        data-tcolor="#ff6b35"  style="background:#ff6b35;"></button>
+      <button class="text-color-btn active" data-tcolor="auto" style="background:conic-gradient(#ff6b35,#fff,#000,#35a7ff,#ff6b35); position:relative;" title="자동"></button>
+      <button class="text-color-btn"        data-tcolor="#fff"    style="background:#fff;"></button>
+      <button class="text-color-btn"        data-tcolor="#000"    style="background:#000;"></button>
+      <button class="text-color-btn"        data-tcolor="#ff6b35" style="background:#ff6b35;"></button>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">상단 자르기 <span class="card-value" id="cropVal">0%</span></div>
+    <input type="range" id="cropSlider" min="0" max="40" value="0">
   </div>
 
   <div class="card">
@@ -319,16 +369,20 @@
   const commentInput   = document.getElementById('commentInput');
   const fontSlider     = document.getElementById('fontSlider');
   const fontVal        = document.getElementById('fontVal');
+  const cropSlider     = document.getElementById('cropSlider');
+  const cropVal        = document.getElementById('cropVal');
+  const cropLine       = document.getElementById('cropLine');
 
   let img          = null;
   let titleRatio   = 0.12;
+  let cropTopRatio = 0;
   let mode         = 'blur';
   let blurRadius   = 25;
   let boxColor     = 'white';
   let boxWidthRatio = 1;
   let commentText  = '';
   let commentFont  = 48;
-  let commentColor = '#fff';
+  let commentColor = 'auto';
 
   // ── 파일 업로드 ──────────────────────────────
   changeBtn.addEventListener('click', () => fileInput.click());
@@ -404,10 +458,18 @@
   // ── 렌더링 ──────────────────────────────────
   function render() {
     if (!img) return;
-    drawTo(ctx, img, img.width, img.height);
+    drawScene(ctx, img, img.width, img.height);
+    // 잘려나갈 상단 영역을 어둡게 표시 (미리보기 전용)
+    if (cropTopRatio > 0) {
+      const cropY = Math.floor(img.height * cropTopRatio);
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0, 0, img.width, cropY);
+      ctx.restore();
+    }
   }
 
-  function drawTo(targetCtx, image, w, h) {
+  function drawScene(targetCtx, image, w, h) {
     const titleH = Math.floor(h * titleRatio);
     targetCtx.filter = 'none';
     targetCtx.clearRect(0, 0, w, h);
@@ -422,7 +484,33 @@
       targetCtx.fillRect(0, titleH, boxW, h - titleH);
     }
 
-    drawComment(targetCtx, w, h, titleH);
+    drawComment(targetCtx, image, w, h, titleH);
+  }
+
+  // 배경 밝기 → 색상 헬퍼
+  function relLuminance(r, g, b) { return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+
+  function hexLuminance(hex) {
+    if (hex === 'white') hex = '#ffffff';
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    return relLuminance(
+      parseInt(hex.slice(0, 2), 16),
+      parseInt(hex.slice(2, 4), 16),
+      parseInt(hex.slice(4, 6), 16)
+    );
+  }
+
+  // 텍스트가 놓이는 영역의 평균 밝기 (0~1)
+  function bgLuminance(image, w, h, titleH) {
+    if (mode === 'box') return hexLuminance(boxColor);
+    const c = document.createElement('canvas');
+    c.width = 1; c.height = 1;
+    const cx = c.getContext('2d');
+    const sy = titleH, sh = Math.max(1, h - titleH);
+    cx.drawImage(image, 0, sy, w, sh, 0, 0, 1, 1);
+    const d = cx.getImageData(0, 0, 1, 1).data;
+    return relLuminance(d[0], d[1], d[2]);
   }
 
   // iOS Safari는 canvas filter:blur 를 지원하지 않으므로 축소→확대로 직접 블러 처리
@@ -462,20 +550,29 @@
   }
 
   // 가려진 영역 위에 코멘트 텍스트 그리기
-  function drawComment(targetCtx, w, h, titleH) {
+  function drawComment(targetCtx, image, w, h, titleH) {
     const text = commentText.trim();
     if (!text) return;
     const dispW  = canvasWrap.offsetWidth || w;
     const scale  = w / dispW;            // 화면 px → 캔버스 px 변환
     const fontPx = commentFont * scale;
 
+    // 글자색 결정 (자동: 배경 밝기에 따라 검정/흰색 중 가장 눈에 띄는 색)
+    let fill = commentColor;
+    if (commentColor === 'auto') {
+      fill = bgLuminance(image, w, h, titleH) > 0.5 ? '#000000' : '#ffffff';
+    }
+    const fillIsLight = hexLuminance(fill) > 0.5;
+    const stroke = fillIsLight ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)';
+
     targetCtx.save();
     targetCtx.font = `700 ${fontPx}px -apple-system, 'Apple SD Gothic Neo', sans-serif`;
     targetCtx.textAlign = 'center';
     targetCtx.textBaseline = 'middle';
-    targetCtx.fillStyle = commentColor;
-    targetCtx.shadowColor = 'rgba(0,0,0,0.55)';
-    targetCtx.shadowBlur  = fontPx * 0.18;
+    targetCtx.lineJoin = 'round';
+    targetCtx.lineWidth = fontPx * 0.16;
+    targetCtx.strokeStyle = stroke;
+    targetCtx.fillStyle = fill;
 
     const regionW = mode === 'box' ? w * boxWidthRatio : w;
     const maxW    = regionW * 0.86;
@@ -484,7 +581,11 @@
     const cx = regionW / 2;
     const cy = (titleH + h) / 2;
     let y = cy - (lines.length - 1) * lineH / 2;
-    for (const ln of lines) { targetCtx.fillText(ln, cx, y); y += lineH; }
+    for (const ln of lines) {
+      targetCtx.strokeText(ln, cx, y);   // 외곽선 먼저
+      targetCtx.fillText(ln, cx, y);
+      y += lineH;
+    }
     targetCtx.restore();
   }
 
@@ -536,7 +637,7 @@
   });
 
   titleSlider.addEventListener('input', () => {
-    titleRatio = +titleSlider.value / 100;
+    titleRatio = Math.max(cropTopRatio + 0.02, +titleSlider.value / 100);
     updateTitleVal();
     updateDragLine();
     render();
@@ -572,10 +673,23 @@
     titleValEl.textContent = Math.round(titleRatio * 100) + '%';
   }
 
+  cropSlider.addEventListener('input', () => {
+    cropTopRatio = +cropSlider.value / 100;
+    if (cropTopRatio > titleRatio - 0.02) {
+      cropTopRatio = Math.max(0, titleRatio - 0.02);
+      cropSlider.value = Math.round(cropTopRatio * 100);
+    }
+    cropVal.textContent = Math.round(cropTopRatio * 100) + '%';
+    updateDragLine();
+    render();
+  });
+
   // ── 드래그 선 ────────────────────────────────
   function updateDragLine() {
     if (!img) return;
-    dragLine.style.top = (canvasWrap.offsetHeight * titleRatio) + 'px';
+    const H = canvasWrap.offsetHeight;
+    dragLine.style.top = (H * titleRatio) + 'px';
+    cropLine.style.top = (H * cropTopRatio) + 'px';
   }
 
   let dragging = false;
@@ -589,7 +703,7 @@
   dragLine.addEventListener('pointermove', e => {
     if (!dragging) return;
     const rect = canvasWrap.getBoundingClientRect();
-    titleRatio = Math.max(0.01, Math.min(0.60, (e.clientY - rect.top) / rect.height));
+    titleRatio = Math.max(cropTopRatio + 0.02, Math.min(0.60, (e.clientY - rect.top) / rect.height));
     titleSlider.value = Math.round(titleRatio * 100);
     updateTitleVal();
     updateDragLine();
@@ -597,6 +711,29 @@
   });
 
   dragLine.addEventListener('pointerup', () => { dragging = false; });
+
+  // 상단 자르기 선 드래그
+  let cropDragging = false;
+
+  cropLine.addEventListener('pointerdown', e => {
+    cropDragging = true;
+    cropLine.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  cropLine.addEventListener('pointermove', e => {
+    if (!cropDragging) return;
+    const rect = canvasWrap.getBoundingClientRect();
+    let r = (e.clientY - rect.top) / rect.height;
+    r = Math.max(0, Math.min(titleRatio - 0.02, r));
+    cropTopRatio = r;
+    cropSlider.value = Math.round(r * 100);
+    cropVal.textContent = Math.round(r * 100) + '%';
+    updateDragLine();
+    render();
+  });
+
+  cropLine.addEventListener('pointerup', () => { cropDragging = false; });
   window.addEventListener('resize', updateDragLine);
 
   // ── 저장 / 공유 ──────────────────────────────
@@ -607,10 +744,20 @@
 
     await new Promise(r => setTimeout(r, 60));
 
+    // 전체 이미지를 그린 뒤 상단을 잘라낸 결과 캔버스 생성
+    const full = document.createElement('canvas');
+    full.width  = img.width;
+    full.height = img.height;
+    drawScene(full.getContext('2d'), img, img.width, img.height);
+
+    const cropY = Math.floor(img.height * cropTopRatio);
     const outCanvas  = document.createElement('canvas');
     outCanvas.width  = img.width;
-    outCanvas.height = img.height;
-    drawTo(outCanvas.getContext('2d'), img, img.width, img.height);
+    outCanvas.height = img.height - cropY;
+    outCanvas.getContext('2d').drawImage(
+      full, 0, cropY, img.width, outCanvas.height,
+      0, 0, img.width, outCanvas.height
+    );
 
     try {
       const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.95));
