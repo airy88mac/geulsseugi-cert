@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>글쓰기 인증</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+      background: #111;
+      color: #fff;
+      min-height: 100vh;
+      padding: 28px 16px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header {
+      font-size: 19px;
+      font-weight: 700;
+      color: #ff6b35;
+      letter-spacing: -0.5px;
+    }
+
+    /* ── 업로드 영역 ── */
+    .upload-area {
+      width: 100%;
+      max-width: 500px;
+      border: 2px dashed #2e2e2e;
+      border-radius: 20px;
+      padding: 56px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-area:active {
+      border-color: #ff6b35;
+      background: rgba(255,107,53,0.06);
+    }
+    .upload-area { position: relative; }
+    .upload-area input {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 5;
+    }
+    .upload-icon { font-size: 52px; margin-bottom: 14px; }
+    .upload-text { color: #555; font-size: 15px; line-height: 1.7; }
+
+    /* ── 캔버스 ── */
+    .canvas-wrap {
+      width: 100%;
+      max-width: 500px;
+      position: relative;
+      display: none;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    }
+    canvas { width: 100%; display: block; }
+
+    /* 주황 경계선 */
+    .drag-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: #ff6b35;
+      cursor: ns-resize;
+      touch-action: none;
+      z-index: 10;
+    }
+    .drag-line::after {
+      content: '제목 끝 — 드래그';
+      position: absolute;
+      right: 10px;
+      top: -26px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ff6b35;
+      background: rgba(0,0,0,0.75);
+      padding: 3px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .drag-pill {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 18px;
+      background: #ff6b35;
+      border-radius: 9px;
+    }
+
+    /* ── 컨트롤 ── */
+    .controls {
+      width: 100%;
+      max-width: 500px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mode-toggle {
+      display: flex;
+      background: #1c1c1e;
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: #555;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.18s;
+    }
+    .mode-btn.active { background: #ff6b35; color: #fff; }
+
+    .card {
+      background: #1c1c1e;
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-value { color: #ff6b35; }
+
+    input[type=range] {
+      width: 100%;
+      height: 6px;
+      accent-color: #ff6b35;
+      cursor: pointer;
+    }
+
+    .color-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .color-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.18s, transform 0.1s;
+    }
+    .color-btn.active { border-color: #ff6b35; transform: scale(1.12); }
+
+    .action-row { display: flex; gap: 10px; }
+    .change-btn {
+      padding: 15px 18px;
+      background: #1c1c1e;
+      color: #888;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .save-btn {
+      flex: 1;
+      padding: 16px;
+      background: #ff6b35;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: -0.3px;
+      transition: opacity 0.15s;
+    }
+    .save-btn:active { opacity: 0.8; }
+    .save-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .tip {
+      font-size: 12px;
+      color: #3a3a3a;
+      text-align: center;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+
+<header>✍️ 글쓰기 인증</header>
+
+<label class="upload-area" id="uploadArea">
+  <input type="file" id="fileInput" accept="image/*">
+  <div class="upload-icon">🖼️</div>
+  <div class="upload-text">탭해서 사진 선택<br><span style="color:#333;font-size:13px">카메라롤에서 바로 가져오기</span></div>
+</label>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <canvas id="canvas"></canvas>
+  <div class="drag-line" id="dragLine">
+    <div class="drag-pill"></div>
+  </div>
+</div>
+
+<div class="controls" id="controls">
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="blur">🌫️ 흐리게</button>
+    <button class="mode-btn" data-mode="box">⬛ 박스</button>
+  </div>
+
+  <div class="card" id="blurCard">
+    <div class="card-label">블러 강도 <span class="card-value" id="blurVal">25</span></div>
+    <input type="range" id="blurSlider" min="5" max="60" value="25">
+  </div>
+
+  <div class="card" id="colorCard" style="display:none">
+    <div class="card-label">박스 색상</div>
+    <div class="color-row">
+      <button class="color-btn active" data-color="white"   style="background:#fff;"></button>
+      <button class="color-btn"        data-color="#000"    style="background:#000;"></button>
+      <button class="color-btn"        data-color="#808080" style="background:#808080;"></button>
+      <button class="color-btn"        data-color="#1c1c1e" style="background:#1c1c1e; border:1px solid #333;"></button>
+      <button class="color-btn"        data-color="#f2e8d9" style="background:#f2e8d9;"></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">제목 영역 위치 <span class="card-value" id="titleVal">─</span></div>
+    <input type="range" id="titleSlider" min="1" max="60" value="12">
+  </div>
+
+  <div class="action-row">
+    <button class="change-btn" id="changeBtn">다른 사진</button>
+    <button class="save-btn"   id="saveBtn">저장 / 공유 →</button>
+  </div>
+
+  <div class="tip">주황 선을 위아래로 드래그하거나<br>슬라이더로 제목 경계를 조정하세요</div>
+</div>
+
+<script>
+  const canvas     = document.getElementById('canvas');
+  const ctx        = canvas.getContext('2d');
+  const fileInput  = document.getElementById('fileInput');
+  const uploadArea = document.getElementById('uploadArea');
+  const canvasWrap = document.getElementById('canvasWrap');
+  const controlsEl = document.getElementById('controls');
+  const dragLine   = document.getElementById('dragLine');
+  const titleSlider = document.getElementById('titleSlider');
+  const blurSlider  = document.getElementById('blurSlider');
+  const blurCard   = document.getElementById('blurCard');
+  const colorCard  = document.getElementById('colorCard');
+  const titleValEl = document.getElementById('titleVal');
+  const blurValEl  = document.getElementById('blurVal');
+  const saveBtn    = document.getElementById('saveBtn');
+  const changeBtn  = document.getElementById('changeBtn');
+
+  let img        = null;
+  let titleRatio = 0.12;
+  let mode       = 'blur';
+  let blurRadius = 25;
+  let boxColor   = 'white';
+
+  // ── 파일 업로드 ──────────────────────────────
+  changeBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const newImg = new Image();
+      newImg.onload = () => {
+        img = newImg;
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        titleRatio = detectTitleRatio(img);
+        titleSlider.value = Math.round(titleRatio * 100);
+        updateTitleVal();
+        render();
+        uploadArea.style.display  = 'none';
+        canvasWrap.style.display  = 'block';
+        controlsEl.style.display  = 'flex';
+        requestAnimationFrame(updateDragLine);
+      };
+      newImg.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = '';
+  });
+
+  // ── 제목 영역 자동 감지 ───────────────────────
+  function detectTitleRatio(image) {
+    const tmpC   = document.createElement('canvas');
+    const scale  = 0.15;
+    const w = Math.max(1, Math.floor(image.width  * scale));
+    const h = Math.max(1, Math.floor(image.height * scale));
+    tmpC.width = w; tmpC.height = h;
+    const tmpCtx = tmpC.getContext('2d');
+    tmpCtx.drawImage(image, 0, 0, w, h);
+    const { data } = tmpCtx.getImageData(0, 0, w, h);
+
+    function bright(i) { return (data[i] + data[i+1] + data[i+2]) / 3; }
+
+    // 배경 밝기: 네 모서리 평균
+    const bgBright = (
+      bright(0) +
+      bright((w - 1) * 4) +
+      bright(((h - 1) * w) * 4) +
+      bright(((h - 1) * w + w - 1) * 4)
+    ) / 4;
+    const isDark = bgBright < 128;
+    const tol    = 28;
+
+    // 빈 줄(배경색과 가까운 행) 탐색 → 제목 끝 감지
+    const minY = Math.floor(h * 0.04);
+    const maxY = Math.floor(h * 0.45);
+    let blankCount = 0;
+
+    for (let y = minY; y < maxY; y++) {
+      let rowSum = 0;
+      for (let x = 0; x < w; x++) rowSum += bright((y * w + x) * 4);
+      const rowAvg = rowSum / w;
+      const isBg   = isDark ? rowAvg < bgBright + tol : rowAvg > bgBright - tol;
+
+      if (isBg) {
+        if (++blankCount >= 3) return (y - 2) / h;
+      } else {
+        blankCount = 0;
+      }
+    }
+    return 0.12;
+  }
+
+  // ── 렌더링 ──────────────────────────────────
+  function render() {
+    if (!img) return;
+    drawTo(ctx, img, img.width, img.height);
+  }
+
+  function drawTo(targetCtx, image, w, h) {
+    const titleH = Math.floor(h * titleRatio);
+    targetCtx.filter = 'none';
+    targetCtx.clearRect(0, 0, w, h);
+    targetCtx.drawImage(image, 0, 0, w, h);
+
+    if (mode === 'blur') {
+      targetCtx.save();
+      targetCtx.beginPath();
+      targetCtx.rect(0, titleH, w, h - titleH);
+      targetCtx.clip();
+      targetCtx.filter = `blur(${blurRadius}px)`;
+      targetCtx.drawImage(image, 0, 0, w, h);
+      targetCtx.filter = 'none';
+      targetCtx.restore();
+    } else {
+      targetCtx.fillStyle = boxColor;
+      targetCtx.fillRect(0, titleH, w, h - titleH);
+    }
+  }
+
+  // ── 모드 버튼 ────────────────────────────────
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      blurCard.style.display  = mode === 'blur' ? 'flex' : 'none';
+      colorCard.style.display = mode === 'box'  ? 'flex' : 'none';
+      render();
+    });
+  });
+
+  // ── 색상 버튼 ────────────────────────────────
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      boxColor = btn.dataset.color;
+      render();
+    });
+  });
+
+  // ── 슬라이더 ─────────────────────────────────
+  blurSlider.addEventListener('input', () => {
+    blurRadius = +blurSlider.value;
+    blurValEl.textContent = blurRadius;
+    render();
+  });
+
+  titleSlider.addEventListener('input', () => {
+    titleRatio = +titleSlider.value / 100;
+    updateTitleVal();
+    updateDragLine();
+    render();
+  });
+
+  function updateTitleVal() {
+    titleValEl.textContent = Math.round(titleRatio * 100) + '%';
+  }
+
+  // ── 드래그 선 ────────────────────────────────
+  function updateDragLine() {
+    if (!img) return;
+    dragLine.style.top = (canvasWrap.offsetHeight * titleRatio) + 'px';
+  }
+
+  let dragging = false;
+
+  dragLine.addEventListener('pointerdown', e => {
+    dragging = true;
+    dragLine.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  dragLine.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rect = canvasWrap.getBoundingClientRect();
+    titleRatio = Math.max(0.01, Math.min(0.60, (e.clientY - rect.top) / rect.height));
+    titleSlider.value = Math.round(titleRatio * 100);
+    updateTitleVal();
+    updateDragLine();
+    render();
+  });
+
+  dragLine.addEventListener('pointerup', () => { dragging = false; });
+  window.addEventListener('resize', updateDragLine);
+
+  // ── 저장 / 공유 ──────────────────────────────
+  saveBtn.addEventListener('click', async () => {
+    if (!img) return;
+    saveBtn.textContent = '처리 중...';
+    saveBtn.disabled = true;
+
+    await new Promise(r => setTimeout(r, 60));
+
+    const outCanvas  = document.createElement('canvas');
+    outCanvas.width  = img.width;
+    outCanvas.height = img.height;
+    drawTo(outCanvas.getContext('2d'), img, img.width, img.height);
+
+    try {
+      const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.95));
+      const file = new File([blob], '글쓰기인증.jpg', { type: 'image/jpeg' });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: '글쓰기 인증' });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href = url; a.download = '글쓰기인증.jpg'; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') alert('저장 실패: ' + err.message);
+    } finally {
+      saveBtn.textContent = '저장 / 공유 →';
+      saveBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
