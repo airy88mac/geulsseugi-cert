@@ -380,6 +380,12 @@
   const cropVal        = document.getElementById('cropVal');
   const cropLine       = document.getElementById('cropLine');
 
+  // iOS에서만 공유 버튼 표시
+  if (!(/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))) {
+    shareBtn.style.display = 'none';
+  }
+
   let img          = null;
   let titleRatio   = 0.12;
   let cropTopRatio = 0;
@@ -782,78 +788,23 @@
     }
   });
 
-  // JPEG blob → PNG blob (ClipboardItem은 PNG만 안정 지원)
-  function toPngBlob(jpegBlob) {
-    return new Promise(resolve => {
-      const tmpImg = new Image();
-      const url = URL.createObjectURL(jpegBlob);
-      tmpImg.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = tmpImg.naturalWidth;
-        c.height = tmpImg.naturalHeight;
-        c.getContext('2d').drawImage(tmpImg, 0, 0);
-        URL.revokeObjectURL(url);
-        c.toBlob(resolve, 'image/png');
-      };
-      tmpImg.src = url;
-    });
-  }
-
-  // iOS 여부: iPhone/iPad 또는 iPadOS(MacIntel + 터치)
-  function isIOS() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-
-  // ── 공유 ─────────────────────────────────────
-  // iOS → navigator.share (Share Sheet)
-  // macOS → navigator.clipboard.write (1회만 복사, Share Sheet 중복 버그 회피)
+  // ── 공유 (iOS 전용 Share Sheet) ─────────────
   shareBtn.addEventListener('click', async () => {
     if (!img) return;
     shareBtn.textContent = '처리 중...';
     shareBtn.disabled = true;
     await new Promise(r => setTimeout(r, 60));
-    let copied = false;
     try {
       const blob = await buildOutputBlob();
       const file = new File([blob], '글쓰기인증.jpg', { type: 'image/jpeg' });
-
-      if (isIOS()) {
-        // iOS: Share Sheet
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: '글쓰기 인증' });
-        }
-      } else {
-        // macOS/desktop: clipboard → download (Share Sheet 사용 안 함 — 중복 버그)
-        if (navigator.clipboard && window.ClipboardItem) {
-          try {
-            const png = await toPngBlob(blob);
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-            copied = true;
-          } catch (_) {
-            // 클립보드 권한 없음 → 다운로드
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = '글쓰기인증.jpg'; a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = '글쓰기인증.jpg'; a.click();
-          URL.revokeObjectURL(url);
-        }
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: '글쓰기 인증' });
       }
     } catch (err) {
       if (err.name !== 'AbortError') alert('공유 실패: ' + err.message);
     } finally {
+      shareBtn.textContent = '공유 →';
       shareBtn.disabled = false;
-      if (copied) {
-        shareBtn.textContent = '복사됨!';
-        setTimeout(() => { shareBtn.textContent = '공유 →'; }, 1500);
-      } else {
-        shareBtn.textContent = '공유 →';
-      }
     }
   });
 </script>
