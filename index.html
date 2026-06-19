@@ -236,6 +236,11 @@
       letter-spacing: -0.3px;
       transition: opacity 0.15s;
     }
+    .save-btn.secondary {
+      background: #2c2c2e;
+      flex: 0 0 auto;
+      padding: 16px 20px;
+    }
     .save-btn:active { opacity: 0.8; }
     .save-btn:disabled { opacity: 0.5; cursor: default; }
 
@@ -342,7 +347,8 @@
 
   <div class="action-row">
     <button class="change-btn" id="changeBtn">다른 사진</button>
-    <button class="save-btn"   id="saveBtn">저장 / 공유 →</button>
+    <button class="save-btn secondary" id="saveBtn">저장</button>
+    <button class="save-btn" id="shareBtn">공유 →</button>
   </div>
 
   <div class="tip">주황 선을 위아래로 드래그하거나<br>슬라이더로 제목 경계를 조정하세요</div>
@@ -363,6 +369,7 @@
   const titleValEl = document.getElementById('titleVal');
   const blurValEl  = document.getElementById('blurVal');
   const saveBtn    = document.getElementById('saveBtn');
+  const shareBtn   = document.getElementById('shareBtn');
   const changeBtn  = document.getElementById('changeBtn');
   const boxWidthSlider = document.getElementById('boxWidthSlider');
   const boxWidthVal    = document.getElementById('boxWidthVal');
@@ -737,46 +744,63 @@
   cropLine.addEventListener('pointerup', () => { cropDragging = false; });
   window.addEventListener('resize', updateDragLine);
 
-  // ── 저장 / 공유 ──────────────────────────────
-  saveBtn.addEventListener('click', async () => {
-    if (!img) return;
-    saveBtn.textContent = '처리 중...';
-    saveBtn.disabled = true;
-
-    await new Promise(r => setTimeout(r, 60));
-
-    // 전체 이미지를 그린 뒤 상단을 잘라낸 결과 캔버스 생성
+  // ── 출력 캔버스 생성 (저장/공유 공통) ──────────
+  async function buildOutputBlob() {
     const full = document.createElement('canvas');
     full.width  = img.width;
     full.height = img.height;
     drawScene(full.getContext('2d'), img, img.width, img.height);
 
     const cropY = Math.floor(img.height * cropTopRatio);
-    const outCanvas  = document.createElement('canvas');
-    outCanvas.width  = img.width;
-    outCanvas.height = img.height - cropY;
-    outCanvas.getContext('2d').drawImage(
-      full, 0, cropY, img.width, outCanvas.height,
-      0, 0, img.width, outCanvas.height
+    const out   = document.createElement('canvas');
+    out.width   = img.width;
+    out.height  = img.height - cropY;
+    out.getContext('2d').drawImage(
+      full, 0, cropY, img.width, out.height,
+      0, 0, img.width, out.height
     );
+    return new Promise(r => out.toBlob(r, 'image/jpeg', 0.95));
+  }
 
+  // ── 저장 (다운로드) ──────────────────────────
+  saveBtn.addEventListener('click', async () => {
+    if (!img) return;
+    saveBtn.textContent = '처리 중...';
+    saveBtn.disabled = true;
+    await new Promise(r => setTimeout(r, 60));
     try {
-      const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.95));
-      const file = new File([blob], '글쓰기인증.jpg', { type: 'image/jpeg' });
+      const blob = await buildOutputBlob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = '글쓰기인증.jpg'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('저장 실패: ' + err.message);
+    } finally {
+      saveBtn.textContent = '저장';
+      saveBtn.disabled = false;
+    }
+  });
 
+  // ── 공유 (네이티브 Share Sheet) ──────────────
+  shareBtn.addEventListener('click', async () => {
+    if (!img) return;
+    shareBtn.textContent = '처리 중...';
+    shareBtn.disabled = true;
+    await new Promise(r => setTimeout(r, 60));
+    try {
+      const blob = await buildOutputBlob();
+      const file = new File([blob], '글쓰기인증.jpg', { type: 'image/jpeg' });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: '글쓰기 인증' });
       } else {
-        const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href = url; a.download = '글쓰기인증.jpg'; a.click();
-        URL.revokeObjectURL(url);
+        alert('이 브라우저는 공유를 지원하지 않습니다. 저장 버튼을 이용해 주세요.');
       }
     } catch (err) {
-      if (err.name !== 'AbortError') alert('저장 실패: ' + err.message);
+      if (err.name !== 'AbortError') alert('공유 실패: ' + err.message);
     } finally {
-      saveBtn.textContent = '저장 / 공유 →';
-      saveBtn.disabled = false;
+      shareBtn.textContent = '공유 →';
+      shareBtn.disabled = false;
     }
   });
 </script>
