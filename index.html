@@ -824,24 +824,20 @@
           await navigator.share({ files: [file], title: '글쓰기 인증' });
         }
       } else {
-        // macOS/desktop: clipboard → share sheet → download 순으로 폴백
-        let handled = false;
-
-        if (!handled && navigator.clipboard && window.ClipboardItem) {
+        // macOS/desktop: clipboard → download (Share Sheet 사용 안 함 — 중복 버그)
+        if (navigator.clipboard && window.ClipboardItem) {
           try {
             const png = await toPngBlob(blob);
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
             copied = true;
-            handled = true;
-          } catch (_) { /* 권한 없음 → 다음 수단으로 */ }
-        }
-
-        if (!handled && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: '글쓰기 인증' });
-          handled = true;
-        }
-
-        if (!handled) {
+          } catch (_) {
+            // 클립보드 권한 없음 → 다운로드
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = '글쓰기인증.jpg'; a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url; a.download = '글쓰기인증.jpg'; a.click();
