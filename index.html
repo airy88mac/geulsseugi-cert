@@ -345,6 +345,11 @@
     <input type="range" id="titleSlider" min="1" max="60" value="12">
   </div>
 
+  <div class="card">
+    <div class="card-label">필름 질감 <span class="card-value" id="grainVal">없음</span></div>
+    <input type="range" id="grainSlider" min="0" max="60" value="0">
+  </div>
+
   <div class="action-row">
     <button class="change-btn" id="changeBtn">다른 사진</button>
     <button class="save-btn secondary" id="saveBtn">저장</button>
@@ -381,6 +386,8 @@
   const cropSlider     = document.getElementById('cropSlider');
   const cropVal        = document.getElementById('cropVal');
   const cropLine       = document.getElementById('cropLine');
+  const grainSlider    = document.getElementById('grainSlider');
+  const grainVal       = document.getElementById('grainVal');
 
   // iOS: 공유 버튼 표시 / macOS: 복사 버튼 표시
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -395,6 +402,7 @@
 
   let img          = null;
   let titleRatio   = 0.12;
+  let grainIntensity = 0;
   let cropTopRatio = 0;
   let mode         = 'blur';
   let blurRadius   = 25;
@@ -506,6 +514,34 @@
     }
 
     drawComment(targetCtx, image, w, h, titleH);
+    applyGrain(targetCtx, w, h, grainIntensity);
+  }
+
+  // 256×256 노이즈 타일을 overlay로 덮어 필름 질감 표현
+  function applyGrain(targetCtx, w, h, intensity) {
+    if (intensity === 0) return;
+    const tileSize = 128;
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = tileSize;
+    const tCtx = tile.getContext('2d');
+    const id = tCtx.createImageData(tileSize, tileSize);
+    for (let i = 0; i < id.data.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      id.data[i] = id.data[i + 1] = id.data[i + 2] = v;
+      id.data[i + 3] = 255;
+    }
+    tCtx.putImageData(id, 0, 0);
+    const ox = (Math.random() * tileSize) | 0;
+    const oy = (Math.random() * tileSize) | 0;
+    targetCtx.save();
+    targetCtx.globalAlpha = (intensity / 60) * 0.38;
+    targetCtx.globalCompositeOperation = 'overlay';
+    for (let y = -oy; y < h; y += tileSize) {
+      for (let x = -ox; x < w; x += tileSize) {
+        targetCtx.drawImage(tile, x, y);
+      }
+    }
+    targetCtx.restore();
   }
 
   // 배경 밝기 → 색상 헬퍼
@@ -688,6 +724,12 @@
       commentColor = btn.dataset.tcolor;
       render();
     });
+  });
+
+  grainSlider.addEventListener('input', () => {
+    grainIntensity = +grainSlider.value;
+    grainVal.textContent = grainIntensity === 0 ? '없음' : grainIntensity;
+    render();
   });
 
   function updateTitleVal() {
