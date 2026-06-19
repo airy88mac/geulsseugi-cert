@@ -795,32 +795,38 @@
     }
   });
 
-  // ── 복사 (macOS 전용, clipboard.write만 사용) ─
+  // ── 복사 (macOS 전용) ────────────────────────
+  // Safari는 clipboard.write 호출이 user gesture와 동일 태스크에 있어야 함.
+  // ClipboardItem에 Promise를 직접 전달하면 gesture 체인이 유지됨.
   copyBtn.addEventListener('click', async () => {
     if (!img) return;
     copyBtn.textContent = '처리 중...';
     copyBtn.disabled = true;
-    await new Promise(r => setTimeout(r, 60));
     try {
-      const blob = await buildOutputBlob();
-      // JPEG → PNG 변환 (ClipboardItem은 PNG만 안정 지원)
-      const png = await new Promise(resolve => {
-        const tmpImg = new Image();
-        const url = URL.createObjectURL(blob);
-        tmpImg.onload = () => {
-          const c = document.createElement('canvas');
-          c.width = tmpImg.naturalWidth; c.height = tmpImg.naturalHeight;
-          c.getContext('2d').drawImage(tmpImg, 0, 0);
-          URL.revokeObjectURL(url);
-          c.toBlob(resolve, 'image/png');
-        };
-        tmpImg.src = url;
-      });
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': (async () => {
+            const blob = await buildOutputBlob();
+            return new Promise(resolve => {
+              const tmpImg = new Image();
+              const url = URL.createObjectURL(blob);
+              tmpImg.onload = () => {
+                const c = document.createElement('canvas');
+                c.width = tmpImg.naturalWidth;
+                c.height = tmpImg.naturalHeight;
+                c.getContext('2d').drawImage(tmpImg, 0, 0);
+                URL.revokeObjectURL(url);
+                c.toBlob(resolve, 'image/png');
+              };
+              tmpImg.src = url;
+            });
+          })()
+        })
+      ]);
       copyBtn.textContent = '복사됨!';
       setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
     } catch (err) {
-      alert('복사 실패: ' + err.message + '\n\nHTTPS 환경에서 열거나 저장 버튼을 이용하세요.');
+      alert('복사 실패: ' + err.message);
       copyBtn.textContent = '복사';
     } finally {
       copyBtn.disabled = false;
