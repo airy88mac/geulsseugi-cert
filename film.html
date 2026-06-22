@@ -98,8 +98,10 @@
       <textarea id="bodyInput" placeholder="여기에 본문을 입력하세요"></textarea>
     </div>
     <div class="field">
-      <label>본문 폰트 <span class="val" id="bodyFontVal">기본</span></label>
-      <input type="text" id="bodyFontInput" list="fontList" placeholder="기본: DX경필바탕 → Nanum Pen Script">
+      <label>본문 폰트 (설치된 한글 폰트)</label>
+      <select id="bodyFontSel" style="background:#15140f;color:#eee;border:1px solid #3a3527;border-radius:9px;padding:10px;font-size:14px;font-family:inherit;">
+        <option value="">기본 (DX경필바탕 → 나눔펜)</option>
+      </select>
     </div>
     <div class="field">
       <label>강조 제목</label>
@@ -111,15 +113,10 @@
              style="width:64px;height:36px;padding:2px;background:#15140f;border:1px solid #3a3527;border-radius:8px;cursor:pointer;">
     </div>
     <div class="field">
-      <label>제목 폰트 <span class="val" id="titleFontVal">기본</span></label>
-      <input type="text" id="titleFontInput" list="fontList" placeholder="기본: 서울한강체 → Gaegu">
-    </div>
-    <div class="field">
-      <button id="loadFontsBtn" type="button"
-              style="width:100%;padding:11px;background:#2c2a22;color:#d8b46a;border:1px solid #3a3527;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;">
-        🖋 내 PC 폰트 목록 불러오기 (Chrome/Edge)
-      </button>
-      <datalist id="fontList"></datalist>
+      <label>제목 폰트 (설치된 한글 폰트)</label>
+      <select id="titleFontSel" style="background:#15140f;color:#eee;border:1px solid #3a3527;border-radius:9px;padding:10px;font-size:14px;font-family:inherit;">
+        <option value="">기본 (서울한강체 → Gaegu)</option>
+      </select>
     </div>
     <div class="field">
       <label>본문 글자 크기 <span class="val" id="fsVal">자동</span></label>
@@ -213,10 +210,8 @@ const mctx = main.getContext('2d');
 const bodyInput  = document.getElementById('bodyInput');
 const titleInput = document.getElementById('titleInput');
 const titleColorInput = document.getElementById('titleColor');
-const bodyFontInput  = document.getElementById('bodyFontInput'),  bodyFontVal  = document.getElementById('bodyFontVal');
-const titleFontInput = document.getElementById('titleFontInput'), titleFontVal = document.getElementById('titleFontVal');
-const loadFontsBtn   = document.getElementById('loadFontsBtn');
-const fontList       = document.getElementById('fontList');
+const bodyFontSel  = document.getElementById('bodyFontSel');
+const titleFontSel = document.getElementById('titleFontSel');
 const fsSlider   = document.getElementById('fsSlider'),  fsVal = document.getElementById('fsVal');
 const autoFit    = document.getElementById('autoFit');
 const lmSlider   = document.getElementById('lmSlider'),  lmVal = document.getElementById('lmVal');
@@ -580,39 +575,70 @@ bodyInput.addEventListener('input', scheduleRender);
 titleInput.addEventListener('input', scheduleRender);
 titleColorInput.addEventListener('input', scheduleRender);
 
-/* 폰트 선택 — 입력칸에 패밀리명을 적으면(또는 자동완성에서 고르면) 즉시 반영.
-   선택한 폰트가 캔버스에 확실히 적용되도록 document.fonts.load 후 렌더. */
-function applyFont(which, family){
-  if (which === 'body'){ selectedBodyFont = family; bodyFontVal.textContent = family || '기본'; }
-  else { selectedTitleFont = family; titleFontVal.textContent = family || '기본'; }
-  scheduleRender();   // 폰트 로드 보장 후 렌더 (ensureFontsLoaded 경유)
-}
-bodyFontInput.addEventListener('input',  () => applyFont('body',  bodyFontInput.value.trim()));
-titleFontInput.addEventListener('input', () => applyFont('title', titleFontInput.value.trim()));
+/* 폰트 선택 — 드롭다운에서 고른 패밀리를 즉시 반영 */
+bodyFontSel.addEventListener('change',  () => { selectedBodyFont  = bodyFontSel.value;  scheduleRender(); });
+titleFontSel.addEventListener('change', () => { selectedTitleFont = titleFontSel.value; scheduleRender(); });
 
-/* 로컬 폰트 목록 불러오기 — Chrome/Edge의 Local Font Access API.
-   불러온 패밀리들을 datalist에 채워 두 입력칸의 자동완성으로 제공. */
-loadFontsBtn.addEventListener('click', async () => {
-  if (!window.queryLocalFonts){
-    alert('이 브라우저는 로컬 폰트 목록 자동 불러오기를 지원하지 않습니다.\n(Chrome/Edge에서만 가능)\n\n대신 폰트 이름을 입력칸에 직접 적으면 적용됩니다.');
-    return;
+/* 설치 여부 판별 — Safari엔 폰트 목록 API가 없으므로, 한글 글자의 렌더 폭을
+   기준 폰트(monospace 등)와 비교해 다르면 "그 폰트가 실제 적용됨 = 설치됨"으로 판단. */
+function fontInstalled(family){
+  const test = '가나다라마ABCmW뷁123', size = 64;
+  const ctx = document.createElement('canvas').getContext('2d');
+  for (const base of ['monospace', 'sans-serif', 'serif']){
+    ctx.font = `${size}px ${base}`;
+    const bw = ctx.measureText(test).width;
+    ctx.font = `${size}px "${family}", ${base}`;
+    if (Math.abs(ctx.measureText(test).width - bw) > 0.5) return true;
   }
-  try {
-    loadFontsBtn.textContent = '불러오는 중...';
-    const fonts = await window.queryLocalFonts();
-    const families = [...new Set(fonts.map(f => f.family))].sort((a,b)=>a.localeCompare(b,'ko'));
-    fontList.innerHTML = '';
-    for (const fam of families){
-      const opt = document.createElement('option');
-      opt.value = fam;
-      fontList.appendChild(opt);
+  return false;
+}
+
+/* 한글 폰트 후보 — label(한글 표기) + 캔버스에 넘길 패밀리명 변형들.
+   이 중 실제 설치된 것만 드롭다운에 보인다. */
+const KOREAN_FONT_CANDIDATES = [
+  { label:'애플 SD 산돌고딕 Neo', families:['Apple SD Gothic Neo','AppleSDGothicNeo','애플 SD 산돌고딕 Neo'] },
+  { label:'애플명조',           families:['AppleMyungjo','애플명조'] },
+  { label:'나눔손글씨 펜',       families:['Nanum Pen Script','나눔손글씨 펜'] },
+  { label:'나눔손글씨 붓',       families:['Nanum Brush Script','나눔손글씨 붓'] },
+  { label:'나눔고딕',           families:['NanumGothic','나눔고딕'] },
+  { label:'나눔명조',           families:['NanumMyeongjo','나눔명조'] },
+  { label:'나눔바른고딕',        families:['NanumBarunGothic','나눔바른고딕'] },
+  { label:'나눔스퀘어',         families:['NanumSquare','나눔스퀘어'] },
+  { label:'맑은 고딕',          families:['Malgun Gothic','맑은 고딕'] },
+  { label:'바탕',              families:['Batang','바탕','BatangChe'] },
+  { label:'굴림',              families:['Gulim','굴림'] },
+  { label:'돋움',              families:['Dotum','돋움'] },
+  { label:'궁서',              families:['Gungseo','GungSeo','궁서'] },
+  { label:'서울한강체',         families:['서울한강체','Seoul Hangang','SeoulHangang'] },
+  { label:'서울남산체',         families:['서울남산체','Seoul Namsan','SeoulNamsan'] },
+  { label:'DX경필바탕',         families:['DX경필바탕','DXGyeongpilBatang'] },
+  { label:'함초롬바탕',         families:['함초롬바탕','HCR Batang'] },
+  { label:'함초롬돋움',         families:['함초롬돋움','HCR Dotum'] },
+  { label:'제주명조',           families:['제주명조','Jeju Myeongjo'] },
+  { label:'제주고딕',           families:['제주고딕','Jeju Gothic'] },
+  { label:'제주한라산',         families:['제주한라산','Jeju Hallasan'] },
+  { label:'본고딕(Noto Sans KR)', families:['Noto Sans KR','Noto Sans CJK KR'] },
+  { label:'본명조(Noto Serif KR)', families:['Noto Serif KR','Noto Serif CJK KR'] },
+];
+
+/* 설치된 한글 폰트만 골라 두 드롭다운에 채운다. */
+function buildFontMenus(){
+  const found = [];
+  for (const cand of KOREAN_FONT_CANDIDATES){
+    const fam = cand.families.find(fontInstalled);
+    if (fam) found.push({ label: cand.label, family: fam });
+  }
+  for (const sel of [bodyFontSel, titleFontSel]){
+    const prev = sel.value;
+    while (sel.options.length > 1) sel.remove(1);   // '기본' 옵션만 남기고 비움
+    for (const f of found){
+      const o = document.createElement('option');
+      o.value = f.family; o.textContent = f.label;
+      sel.appendChild(o);
     }
-    loadFontsBtn.textContent = `🖋 폰트 ${families.length}개 불러옴 — 입력칸에서 선택`;
-  } catch (e){
-    loadFontsBtn.textContent = '🖋 내 PC 폰트 목록 불러오기 (Chrome/Edge)';
-    alert('폰트 목록을 불러오지 못했습니다: ' + e.message);
+    sel.value = prev;   // 선택 유지
   }
-});
+}
 
 /* PNG 내보내기 — 캔버스(1600×2100)만 저장, 패널은 미포함 */
 exportBtn.addEventListener('click', () => {
@@ -634,8 +660,9 @@ function init(){
   baseImg.onerror = () => { baseReady = false; renderWithFonts(); }; // 없으면 fallback
   baseImg.src = 'assets/base.png';
 
-  renderWithFonts();              // 폰트 로드 보장 후 첫 렌더
-  setTimeout(renderWithFonts, 1500); // 폰트가 늦게 와도 강제 재렌더
+  // 폰트 로드 보장 → 설치된 한글 폰트 메뉴 구성 → 첫 렌더
+  ensureFontsLoaded().then(() => { buildFontMenus(); render(); });
+  setTimeout(() => { buildFontMenus(); renderWithFonts(); }, 1500);
 }
 init();
 </script>
