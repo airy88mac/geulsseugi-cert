@@ -98,6 +98,10 @@
       <textarea id="bodyInput" placeholder="여기에 본문을 입력하세요"></textarea>
     </div>
     <div class="field">
+      <label>본문 폰트 <span class="val" id="bodyFontVal">기본</span></label>
+      <input type="text" id="bodyFontInput" list="fontList" placeholder="기본: DX경필바탕 → Nanum Pen Script">
+    </div>
+    <div class="field">
       <label>강조 제목</label>
       <input type="text" id="titleInput" value="">
     </div>
@@ -105,6 +109,17 @@
       <label>제목 색상</label>
       <input type="color" id="titleColor" value="#8a5a3c"
              style="width:64px;height:36px;padding:2px;background:#15140f;border:1px solid #3a3527;border-radius:8px;cursor:pointer;">
+    </div>
+    <div class="field">
+      <label>제목 폰트 <span class="val" id="titleFontVal">기본</span></label>
+      <input type="text" id="titleFontInput" list="fontList" placeholder="기본: 서울한강체 → Gaegu">
+    </div>
+    <div class="field">
+      <button id="loadFontsBtn" type="button"
+              style="width:100%;padding:11px;background:#2c2a22;color:#d8b46a;border:1px solid #3a3527;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;">
+        🖋 내 PC 폰트 목록 불러오기 (Chrome/Edge)
+      </button>
+      <datalist id="fontList"></datalist>
     </div>
     <div class="field">
       <label>본문 글자 크기 <span class="val" id="fsVal">자동</span></label>
@@ -173,13 +188,19 @@
 
 const W = 1600, H = 1200;                 // 내보내기 해상도 (base.png 4:3 비율)
 
-/* 본문 손글씨 폰트 스택. DX경필바탕이 (로컬 설치 or 임베드되어) 있으면 우선 사용,
-   없으면 Nanum Pen Script로 폴백. 이름 표기 변형도 함께 시도. */
-const BODY_FONT = `'DX경필바탕', 'DXGyeongpilBatang', 'DX Gyeongpil Batang', 'Nanum Pen Script', cursive`;
-
-/* 제목 폰트 스택. 서울 한강체가 (로컬 설치 or 임베드되어) 있으면 우선 사용,
-   없으면 Gaegu로 폴백. */
-const TITLE_FONT = `'서울한강체', 'Seoul Hangang', 'SeoulHangang', 'SeoulHangangM', 'Gaegu', cursive`;
+/* 본문/제목 폰트 — 사용자가 로컬 폰트를 고르면 그 패밀리를 맨 앞에 두고,
+   없으면 기본값(본문=DX경필바탕→Nanum Pen Script / 제목=서울한강체→Gaegu)으로 폴백.
+   selectedBodyFont/selectedTitleFont가 비면 기본 스택만 사용. */
+let selectedBodyFont = '';   // 사용자가 고른 본문 폰트 패밀리명
+let selectedTitleFont = '';  // 사용자가 고른 제목 폰트 패밀리명
+function bodyFontStack(){
+  return (selectedBodyFont ? `"${selectedBodyFont}", ` : '')
+    + `'DX경필바탕', 'DXGyeongpilBatang', 'Nanum Pen Script', cursive`;
+}
+function titleFontStack(){
+  return (selectedTitleFont ? `"${selectedTitleFont}", ` : '')
+    + `'서울한강체', 'Seoul Hangang', 'SeoulHangang', 'Gaegu', cursive`;
+}
 
 /* 배경 이미지(base.png)에서 쓸 영역 (이미지 비율 0~1).
    새 이미지는 책이 이미 수평이고 프레임을 꽉 채우므로 전체 사용.
@@ -192,6 +213,10 @@ const mctx = main.getContext('2d');
 const bodyInput  = document.getElementById('bodyInput');
 const titleInput = document.getElementById('titleInput');
 const titleColorInput = document.getElementById('titleColor');
+const bodyFontInput  = document.getElementById('bodyFontInput'),  bodyFontVal  = document.getElementById('bodyFontVal');
+const titleFontInput = document.getElementById('titleFontInput'), titleFontVal = document.getElementById('titleFontVal');
+const loadFontsBtn   = document.getElementById('loadFontsBtn');
+const fontList       = document.getElementById('fontList');
 const fsSlider   = document.getElementById('fsSlider'),  fsVal = document.getElementById('fsVal');
 const autoFit    = document.getElementById('autoFit');
 const lmSlider   = document.getElementById('lmSlider'),  lmVal = document.getElementById('lmVal');
@@ -318,7 +343,7 @@ const BODY = { top: 0.155, bottom: 0.83, gutter: 0.035 };
    가독성을 위해 글자는 수평. 손글씨 느낌은 색/베이스라인/자간 미세 랜덤으로만. */
 function layoutBody(text, fontSize, leftMargin, rightMargin, measureCtx, draw){
   reseed(20240601 + text.length + fontSize);
-  measureCtx.font = `${fontSize}px ${BODY_FONT}`;
+  measureCtx.font = `${fontSize}px ${bodyFontStack()}`;
 
   const top = H*BODY.top, bottom = H*BODY.bottom;
   const lineH = fontSize * 1.5;
@@ -375,7 +400,7 @@ function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  ctx.font = `${fontSize}px ${BODY_FONT}`;
+  ctx.font = `${fontSize}px ${bodyFontStack()}`;
   ctx.textBaseline = 'alphabetic';
   layoutBody(text, fontSize, leftMargin, rightMargin, ctx, ctx);
   return c;
@@ -394,7 +419,7 @@ function renderTitleLayer(title){
 
   const color = titleColorInput.value;  // 사용자가 고른 제목 색상
   const fs = W * 0.072;                 // 제목 크기
-  ctx.font = `700 ${fs}px ${TITLE_FONT}`;
+  ctx.font = `700 ${fs}px ${titleFontStack()}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -541,6 +566,43 @@ dpSlider.addEventListener('input', () => { dpVal.textContent = dpSlider.value; s
 bodyInput.addEventListener('input', scheduleRender);
 titleInput.addEventListener('input', scheduleRender);
 titleColorInput.addEventListener('input', scheduleRender);
+
+/* 폰트 선택 — 입력칸에 패밀리명을 적으면(또는 자동완성에서 고르면) 즉시 반영.
+   선택한 폰트가 캔버스에 확실히 적용되도록 document.fonts.load 후 렌더. */
+function applyFont(which, family){
+  if (which === 'body'){ selectedBodyFont = family; bodyFontVal.textContent = family || '기본'; }
+  else { selectedTitleFont = family; titleFontVal.textContent = family || '기본'; }
+  if (family && document.fonts && document.fonts.load){
+    document.fonts.load(`24px "${family}"`).then(render).catch(()=>{});
+  }
+  scheduleRender();
+}
+bodyFontInput.addEventListener('input',  () => applyFont('body',  bodyFontInput.value.trim()));
+titleFontInput.addEventListener('input', () => applyFont('title', titleFontInput.value.trim()));
+
+/* 로컬 폰트 목록 불러오기 — Chrome/Edge의 Local Font Access API.
+   불러온 패밀리들을 datalist에 채워 두 입력칸의 자동완성으로 제공. */
+loadFontsBtn.addEventListener('click', async () => {
+  if (!window.queryLocalFonts){
+    alert('이 브라우저는 로컬 폰트 목록 자동 불러오기를 지원하지 않습니다.\n(Chrome/Edge에서만 가능)\n\n대신 폰트 이름을 입력칸에 직접 적으면 적용됩니다.');
+    return;
+  }
+  try {
+    loadFontsBtn.textContent = '불러오는 중...';
+    const fonts = await window.queryLocalFonts();
+    const families = [...new Set(fonts.map(f => f.family))].sort((a,b)=>a.localeCompare(b,'ko'));
+    fontList.innerHTML = '';
+    for (const fam of families){
+      const opt = document.createElement('option');
+      opt.value = fam;
+      fontList.appendChild(opt);
+    }
+    loadFontsBtn.textContent = `🖋 폰트 ${families.length}개 불러옴 — 입력칸에서 선택`;
+  } catch (e){
+    loadFontsBtn.textContent = '🖋 내 PC 폰트 목록 불러오기 (Chrome/Edge)';
+    alert('폰트 목록을 불러오지 못했습니다: ' + e.message);
+  }
+});
 
 /* PNG 내보내기 — 캔버스(1600×2100)만 저장, 패널은 미포함 */
 exportBtn.addEventListener('click', () => {
