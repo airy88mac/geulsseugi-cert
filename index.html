@@ -517,45 +517,59 @@
       const bodyH = h - titleH;
       const t = grainIntensity / 60;
 
-      // ① 가벼운 블러로 텍스트 엣지 먼저 녹임
-      const blurred = blurredCanvas(image, w, h, 6 + t * 10);
-      targetCtx.drawImage(blurred, 0, titleH, w, bodyH, 0, titleH, w, bodyH);
-
-      // ② 파스텔 유화 붓터치 패치 덮기
       const colors = [
-        [255,179,185], // 핑크
-        [171,220,195], // 민트
-        [255,214,180], // 피치
-        [186,210,235], // 하늘
-        [255,236,190], // 크림
-        [210,190,230], // 라벤더
-        [200,230,210], // 연두
-        [255,200,175], // 살구
+        [255,168,180], // 핑크
+        [150,215,185], // 민트
+        [255,205,160], // 피치
+        [165,200,230], // 하늘
+        [250,230,170], // 크림
+        [200,175,225], // 라벤더
+        [185,225,200], // 연두
+        [255,190,160], // 살구
+        [240,210,220], // 로즈
+        [175,220,220], // 청록
       ];
 
-      // 이미지 크기 기반 고정 시드 → 렌더링마다 패턴 동일
       let xs = (w * 1000 + h) | 1;
       function sr() {
         xs ^= xs << 13; xs ^= xs >> 17; xs ^= xs << 5;
         return (xs >>> 0) / 0xffffffff;
       }
 
-      const numStrokes = Math.floor(120 + t * 200);
-      for (let i = 0; i < numStrokes; i++) {
-        const cx   = sr() * w;
-        const cy   = titleH + sr() * bodyH;
-        const rx   = (15 + sr() * 55) * (0.6 + t * 0.6);
-        const ry   = (10 + sr() * 35) * (0.6 + t * 0.6);
-        const ang  = sr() * Math.PI;
-        const alpha = 0.25 + sr() * 0.35;
+      // 레이어1: 큰 패치 — 배경을 파스텔로 채움
+      const bigCount = Math.floor(60 + t * 80);
+      for (let i = 0; i < bigCount; i++) {
+        const cx  = sr() * w;
+        const cy  = titleH + sr() * bodyH;
+        const rx  = 40 + sr() * 90;
+        const ry  = 25 + sr() * 55;
+        const ang = sr() * Math.PI;
         const [r, g, b] = colors[Math.floor(sr() * colors.length)];
-
         targetCtx.save();
         targetCtx.translate(cx, cy);
         targetCtx.rotate(ang);
         targetCtx.beginPath();
         targetCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        targetCtx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.55 + t * 0.25})`;
+        targetCtx.fill();
+        targetCtx.restore();
+      }
+
+      // 레이어2: 작은 패치 — 붓 질감
+      const smallCount = Math.floor(150 + t * 250);
+      for (let i = 0; i < smallCount; i++) {
+        const cx  = sr() * w;
+        const cy  = titleH + sr() * bodyH;
+        const rx  = 8 + sr() * 32;
+        const ry  = 5 + sr() * 18;
+        const ang = sr() * Math.PI;
+        const [r, g, b] = colors[Math.floor(sr() * colors.length)];
+        targetCtx.save();
+        targetCtx.translate(cx, cy);
+        targetCtx.rotate(ang);
+        targetCtx.beginPath();
+        targetCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.45 + sr() * 0.35})`;
         targetCtx.fill();
         targetCtx.restore();
       }
