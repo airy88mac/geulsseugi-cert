@@ -264,9 +264,9 @@ function roundRect(ctx, x, y, w, h, r){
    기준 좌표는 base.png(펼친 책+만년필) 구도에 맞춤. 펜 위치가 다르면 PEN 수정.
    ------------------------------------------------------------------------- */
 const PEN = {
-  x1: W*0.42, y1: H*0.86,   // 좌하단
-  x2: W*0.80, y2: H*0.44,   // 우상단
-  half: W*0.055             // 띠 반폭
+  x1: W*0.38, y1: H*0.72,   // 펜 끝(촉) — 책 중앙 약간 아래
+  x2: W*0.82, y2: H*0.40,   // 펜 꼭지 — 우상단
+  half: W*0.07              // 띠 반폭
 };
 function inPenBand(px, py){
   const dx = PEN.x2 - PEN.x1, dy = PEN.y2 - PEN.y1;
@@ -291,8 +291,8 @@ function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
 
   reseed(20240601 + text.length + fontSize); // 입력 의존 시드
 
-  const top = H*0.20, bottom = H*0.80;
-  const gutter = W*0.03;                      // 가운데 접힘 여백
+  const top = H*0.225, bottom = H*0.73;       // 펼친 책 글씨 영역 세로 범위
+  const gutter = W*0.035;                      // 가운데 접힘 여백
   const lineH = fontSize * 1.55;
 
   // 좌/우 페이지 영역 (여백 슬라이더로 가로 폭 조절)
@@ -355,7 +355,7 @@ function renderTitleLayer(title){
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const cx = W * 0.5, cy = H * 0.875;
+  const cx = W * 0.5, cy = H * 0.785;   // 펼친 책 하단의 빈 크림 영역
   const tw = ctx.measureText(title).width;
 
   // 그림자 (종이 위에 얹힌 느낌)
