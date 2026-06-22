@@ -99,7 +99,7 @@
     </div>
     <div class="field">
       <label>강조 제목</label>
-      <input type="text" id="titleInput" value="오른손에게">
+      <input type="text" id="titleInput" value="">
     </div>
     <div class="field">
       <label>본문 글자 크기 <span class="val" id="fsVal">34</span></label>
@@ -349,6 +349,8 @@ function renderTitleLayer(title){
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
+
+  if (!title.trim()) return c;          // 제목이 비면 아무것도 그리지 않음
 
   const fs = W * 0.075;                 // 제목 크기
   ctx.font = `700 ${fs}px 'Gaegu', cursive`;
