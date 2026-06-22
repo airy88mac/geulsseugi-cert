@@ -278,67 +278,122 @@ function inPenBand(px, py){
 }
 
 /* -------------------------------------------------------------------------
-   본문 손글씨 — 좌/우 두 페이지 영역을 흐르며 채움.
-   글자색/베이스라인/회전/자간을 미세 랜덤으로 흔들어 손글씨 느낌.
-   반환: 본문을 그린 offscreen canvas (투명 배경).
+   펼친 책 두 페이지의 글씨 영역을 "사다리꼴(quad)"로 정의.
+   책이 약간 기울고 펼쳐져 있어 평면 직사각형으로는 안 맞으므로,
+   각 페이지를 네 꼭짓점으로 잡고 텍스트를 그 면에 맞춰 변형(warp)한다.
+   값은 캔버스 비율(0~1). 책 위치가 바뀌면 이 좌표만 조정하면 됨.
+   tl=좌상, tr=우상(접힘쪽), br=우하(접힘쪽), bl=좌하  (좌측 페이지 기준)
    ------------------------------------------------------------------------- */
-function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
+const LEFT_QUAD = {
+  tl: [0.108, 0.350], tr: [0.470, 0.300],
+  br: [0.478, 0.690], bl: [0.140, 0.660]
+};
+const RIGHT_QUAD = {
+  tl: [0.522, 0.300], tr: [0.898, 0.345],
+  br: [0.866, 0.700], bl: [0.480, 0.690]
+};
+// 캔버스 픽셀 좌표로 변환
+function quadPx(q){
+  return {
+    tl: [q.tl[0]*W, q.tl[1]*H], tr: [q.tr[0]*W, q.tr[1]*H],
+    br: [q.br[0]*W, q.br[1]*H], bl: [q.bl[0]*W, q.bl[1]*H]
+  };
+}
+
+/* 사각형 이미지(flat)를 dst 캔버스의 사다리꼴 quad에 맞춰 그림.
+   격자(cols×rows)로 잘게 나눠 각 셀을 affine 변환으로 그려 휘어짐을 근사한다.
+   cols/rows를 키우면 더 매끈하지만 느려짐. */
+function drawImageQuad(dst, img, q, cols=14, rows=18){
+  const iw = img.width, ih = img.height;
+  const lerp = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  const bil = (u, v) => {
+    const top = lerp(q.tl, q.tr, u), bot = lerp(q.bl, q.br, u);
+    return lerp(top, bot, v);
+  };
+  for (let r = 0; r < rows; r++){
+    for (let c = 0; c < cols; c++){
+      const u0 = c/cols, u1 = (c+1)/cols, v0 = r/rows, v1 = (r+1)/rows;
+      const sx = u0*iw, sy = v0*ih, sw = (u1-u0)*iw, sh = (v1-v0)*ih;
+      const p00 = bil(u0, v0), p10 = bil(u1, v0), p01 = bil(u0, v1);
+      // affine: source rect → dest 평행사변형(p00,p10,p01)
+      const a = (p10[0]-p00[0])/sw, b = (p10[1]-p00[1])/sw;
+      const cc = (p01[0]-p00[0])/sh, d = (p01[1]-p00[1])/sh;
+      const e = p00[0]-a*sx-cc*sy, f = p00[1]-b*sx-d*sy;
+      dst.save();
+      dst.setTransform(a, b, cc, d, e, f);
+      // 셀을 살짝 키워(+1px) 격자 사이 틈(seam) 방지
+      dst.drawImage(img, sx, sy, sw+1, sh+1, sx, sy, sw+1, sh+1);
+      dst.restore();
+    }
+  }
+  dst.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/* 평면 페이지 한 장(직사각형) 캔버스. 여기에 손글씨를 평평하게 쓴 뒤
+   나중에 drawImageQuad로 책 사다리꼴에 입힌다. */
+const PAGE_W = 760, PAGE_H = 1000;
+function makeSheet(){
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+  c.width = PAGE_W; c.height = PAGE_H;
+  return { canvas: c, ctx: c.getContext('2d') };
+}
 
-  reseed(20240601 + text.length + fontSize); // 입력 의존 시드
+/* -------------------------------------------------------------------------
+   본문 손글씨 — 좌/우 페이지를 흐르며 채움(좌→우).
+   각 페이지는 평면 시트에 그린다. 글자색/베이스라인/회전/자간 미세 랜덤.
+   margin 슬라이더는 각 페이지 바깥쪽 여백(안쪽=접힘쪽은 고정)으로 적용.
+   반환: [좌측시트 canvas, 우측시트 canvas]
+   ------------------------------------------------------------------------- */
+function renderBodyFlat(text, fontSize, leftMargin, rightMargin){
+  const sheets = [makeSheet(), makeSheet()];
+  reseed(20240601 + text.length + fontSize);
 
-  const top = H*0.225, bottom = H*0.73;       // 펼친 책 글씨 영역 세로 범위
-  const gutter = W*0.035;                      // 가운데 접힘 여백
-  const lineH = fontSize * 1.55;
-
-  // 좌/우 페이지 영역 (여백 슬라이더로 가로 폭 조절)
-  const regions = [
-    { left: W*(leftMargin/100),  right: W*0.5 - gutter },
-    { left: W*0.5 + gutter,      right: W*(1 - rightMargin/100) }
+  const top = PAGE_H * 0.05, bottom = PAGE_H * 0.95;
+  const lineH = fontSize * 1.5;
+  const spaceW = fontSize * 0.32;
+  // 각 페이지 가로 영역(시트 좌표). 바깥 여백만 슬라이더로 조절.
+  const bounds = [
+    { left: PAGE_W*(leftMargin/100),  right: PAGE_W*0.95 }, // 좌측: 우(접힘) 고정
+    { left: PAGE_W*0.05,              right: PAGE_W*(1-rightMargin/100) } // 우측: 좌(접힘) 고정
   ];
 
-  let ri = 0;
-  let x = regions[0].left;
-  let y = top + lineH;
-  const spaceW = fontSize * 0.32;
+  let si = 0;
+  let ctx = sheets[0].ctx;
+  ctx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+  ctx.textBaseline = 'alphabetic';
+  let x = bounds[0].left, y = top + lineH;
+
+  function setSheet(i){
+    si = i; ctx = sheets[i].ctx;
+    ctx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+    ctx.textBaseline = 'alphabetic';
+    x = bounds[i].left; y = top + lineH;
+  }
+  function newline(){
+    x = bounds[si].left; y += lineH;
+    if (y > bottom){ if (si + 1 >= sheets.length) return false; setSheet(si + 1); }
+    return true;
+  }
 
   for (const ch of text){
-    const reg = regions[ri];
-
-    if (ch === '\n'){
-      x = reg.left; y += lineH;
-      if (y > bottom){ ri++; if (ri >= regions.length) break; y = top + lineH; x = regions[ri].left; }
-      continue;
-    }
-
+    if (ch === '\n'){ if (!newline()) break; continue; }
     const cw = (ch === ' ') ? spaceW : ctx.measureText(ch).width;
-
-    // 줄바꿈
-    if (x + cw > reg.right){
-      x = reg.left; y += lineH;
-      if (y > bottom){ ri++; if (ri >= regions.length) break; y = top + lineH; x = regions[ri].left; }
-    }
+    if (x + cw > bounds[si].right){ if (!newline()) break; }
 
     if (ch !== ' '){
       const jx = x + rndRange(-1, 1);
       const jy = y + rndRange(-2, 2);              // 베이스라인 ±2px
-      if (!inPenBand(jx, jy)){                     // 펜 사선 영역은 건너뜀
-        const gray = 95 + Math.round(rndRange(0, 15)); // #5f→#6e 사이
-        ctx.save();
-        ctx.translate(jx, jy);
-        ctx.rotate(rndRange(-0.026, 0.026));        // 약 ±1.5°
-        ctx.fillStyle = `rgb(${gray},${gray-4},${gray-8})`;
-        ctx.fillText(ch, 0, 0);
-        ctx.restore();
-      }
+      const gray = 95 + Math.round(rndRange(0, 15)); // #5f→#6e 사이
+      ctx.save();
+      ctx.translate(jx, jy);
+      ctx.rotate(rndRange(-0.026, 0.026));         // 약 ±1.5°
+      ctx.fillStyle = `rgb(${gray},${gray-4},${gray-8})`;
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
     }
     x += cw + rndRange(-0.5, 1.5);                 // 자간 미세 랜덤
   }
-  return c;
+  return [sheets[0].canvas, sheets[1].canvas];
 }
 
 /* -------------------------------------------------------------------------
@@ -417,13 +472,30 @@ function render(){
   // ① 배경
   drawBackground(mctx);
 
-  // ② 본문 — offscreen → SVG 필터(일렁임+음영) → multiply 0.88로 종이에 스며들게
-  const bodyLayer = renderBodyLayer(bodyInput.value, fontSize, lm, rm);
+  // ② 본문 — 평면 시트에 손글씨 → 책 사다리꼴에 warp → 펜 영역 제거 → 동화 합성
+  const [leftSheet, rightSheet] = renderBodyFlat(bodyInput.value, fontSize, lm, rm);
+  // 책 위에 변형된 본문을 모을 임시 캔버스
+  const bookTxt = document.createElement('canvas');
+  bookTxt.width = W; bookTxt.height = H;
+  const btx = bookTxt.getContext('2d');
+  drawImageQuad(btx, leftSheet,  quadPx(LEFT_QUAD));
+  drawImageQuad(btx, rightSheet, quadPx(RIGHT_QUAD));
+  // 펜이 놓인 사선 영역의 글자를 지움 (destination-out 캡슐)
+  btx.save();
+  btx.globalCompositeOperation = 'destination-out';
+  btx.strokeStyle = '#000';
+  btx.lineWidth = PEN.half * 2;
+  btx.lineCap = 'round';
+  btx.beginPath();
+  btx.moveTo(PEN.x1, PEN.y1); btx.lineTo(PEN.x2, PEN.y2);
+  btx.stroke();
+  btx.restore();
+  // 종이에 스며들게: SVG 동화 필터 + multiply 0.88
   mctx.save();
   mctx.globalAlpha = 0.88;
   mctx.globalCompositeOperation = 'multiply';
   mctx.filter = dp > 0 ? 'url(#oilFilter)' : 'none';
-  mctx.drawImage(bodyLayer, 0, 0);
+  mctx.drawImage(bookTxt, 0, 0);
   mctx.restore();
 
   // ③ 제목 — 같은 동화 필터, 일반 합성(또렷하게)
