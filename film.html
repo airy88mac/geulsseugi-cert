@@ -177,6 +177,10 @@ const W = 1600, H = 1200;                 // 내보내기 해상도 (base.png 4:
    없으면 Nanum Pen Script로 폴백. 이름 표기 변형도 함께 시도. */
 const BODY_FONT = `'DX경필바탕', 'DXGyeongpilBatang', 'DX Gyeongpil Batang', 'Nanum Pen Script', cursive`;
 
+/* 제목 폰트 스택. 서울 한강체가 (로컬 설치 or 임베드되어) 있으면 우선 사용,
+   없으면 Gaegu로 폴백. */
+const TITLE_FONT = `'서울한강체', 'Seoul Hangang', 'SeoulHangang', 'SeoulHangangM', 'Gaegu', cursive`;
+
 /* 배경 이미지(base.png)에서 쓸 영역 (이미지 비율 0~1).
    새 이미지는 책이 이미 수평이고 프레임을 꽉 채우므로 전체 사용.
    다른 이미지를 쓰면 이 값만 조정. */
@@ -390,7 +394,7 @@ function renderTitleLayer(title){
 
   const color = titleColorInput.value;  // 사용자가 고른 제목 색상
   const fs = W * 0.072;                 // 제목 크기
-  ctx.font = `700 ${fs}px 'Gaegu', cursive`;
+  ctx.font = `700 ${fs}px ${TITLE_FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
