@@ -95,11 +95,16 @@
   <div class="panel-body">
     <div class="field">
       <label>본문 (손글씨로 채워짐)</label>
-      <textarea id="bodyInput">오랜만에 책을 펼친다. 활자를 읽는다는 건 누군가의 마음을 더듬는 일이라서, 한 문장 한 문장 천천히 따라가다 보면 어느새 내 안의 작은 방에 불이 켜진다. 오늘은 그 불빛에 기대어 몇 줄을 적어두기로 한다. 잊고 싶지 않은 장면들, 다시 돌아오고 싶은 마음, 그리고 오른손이 기억하는 펜의 무게까지. 종이는 말이 없지만 가장 오래 들어주는 친구다. 그래서 나는 또 쓴다.</textarea>
+      <textarea id="bodyInput" placeholder="여기에 본문을 입력하세요"></textarea>
     </div>
     <div class="field">
       <label>강조 제목</label>
       <input type="text" id="titleInput" value="">
+    </div>
+    <div class="field">
+      <label>제목 색상</label>
+      <input type="color" id="titleColor" value="#8a5a3c"
+             style="width:64px;height:36px;padding:2px;background:#15140f;border:1px solid #3a3527;border-radius:8px;cursor:pointer;">
     </div>
     <div class="field">
       <label>본문 글자 크기 <span class="val" id="fsVal">자동</span></label>
@@ -182,6 +187,7 @@ const mctx = main.getContext('2d');
 // ── DOM 핸들 ──
 const bodyInput  = document.getElementById('bodyInput');
 const titleInput = document.getElementById('titleInput');
+const titleColorInput = document.getElementById('titleColor');
 const fsSlider   = document.getElementById('fsSlider'),  fsVal = document.getElementById('fsVal');
 const autoFit    = document.getElementById('autoFit');
 const lmSlider   = document.getElementById('lmSlider'),  lmVal = document.getElementById('lmVal');
@@ -372,7 +378,7 @@ function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
 }
 
 /* -------------------------------------------------------------------------
-   강조 제목 — 하단 중앙, Gaegu 굵게, 초록(#2f8b3c) + 밑줄 + 약한 그림자.
+   강조 제목 — 하단 중앙, Gaegu 굵게, 색상 선택값 + 밑줄 + 약한 그림자.
    반환: 제목 offscreen canvas.
    ------------------------------------------------------------------------- */
 function renderTitleLayer(title){
@@ -382,26 +388,27 @@ function renderTitleLayer(title){
 
   if (!title.trim()) return c;          // 제목이 비면 아무것도 그리지 않음
 
-  const fs = W * 0.075;                 // 제목 크기
+  const color = titleColorInput.value;  // 사용자가 고른 제목 색상
+  const fs = W * 0.072;                 // 제목 크기
   ctx.font = `700 ${fs}px 'Gaegu', cursive`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const cx = W * 0.5, cy = H * 0.875;   // 펼친 책 하단의 빈 크림 영역
+  const cx = W * 0.5, cy = H * 0.935;   // 책 아래쪽으로 더 내림
   const tw = ctx.measureText(title).width;
 
   // 그림자 (종이 위에 얹힌 느낌)
-  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowColor = 'rgba(0,0,0,0.18)';
   ctx.shadowBlur = 2; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
-  ctx.fillStyle = '#2f8b3c';
+  ctx.fillStyle = color;
   ctx.fillText(title, cx, cy);
 
   // 밑줄 (글자폭에 맞춤)
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = '#2f8b3c';
+  ctx.strokeStyle = color;
   ctx.lineWidth = fs * 0.06;
   ctx.lineCap = 'round';
-  const uy = cy + fs * 0.55;
+  const uy = cy + fs * 0.52;
   ctx.beginPath();
   ctx.moveTo(cx - tw/2, uy);
   ctx.lineTo(cx + tw/2, uy);
@@ -529,6 +536,7 @@ rmSlider.addEventListener('input', () => { rmVal.textContent = rmSlider.value + 
 dpSlider.addEventListener('input', () => { dpVal.textContent = dpSlider.value; scheduleRender(); });
 bodyInput.addEventListener('input', scheduleRender);
 titleInput.addEventListener('input', scheduleRender);
+titleColorInput.addEventListener('input', scheduleRender);
 
 /* PNG 내보내기 — 캔버스(1600×2100)만 저장, 패널은 미포함 */
 exportBtn.addEventListener('click', () => {
