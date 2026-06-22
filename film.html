@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유화 노트 — 글쓰기 인증</title>
+
+<!-- 한글 손글씨 폰트: 본문=Nanum Pen Script, 제목=Gaegu -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    background: #15140f;
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    gap: 14px;
+  }
+  header { font-size: 18px; font-weight: 700; color: #d8b46a; letter-spacing: -0.5px; }
+
+  /* ── 컨트롤 패널 (내보내기 결과엔 포함 안 됨) ── */
+  .panel {
+    width: 100%;
+    max-width: 520px;
+    background: #221f17;
+    border: 1px solid #3a3527;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .panel summary {
+    cursor: pointer;
+    padding: 14px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #d8b46a;
+    list-style: none;
+  }
+  .panel summary::-webkit-details-marker { display: none; }
+  .panel-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-size: 12px; font-weight: 600; color: #9b937e;
+    display: flex; justify-content: space-between;
+  }
+  .field label .val { color: #d8b46a; }
+  textarea, input[type=text] {
+    background: #15140f; color: #eee;
+    border: 1px solid #3a3527; border-radius: 9px;
+    padding: 10px; font-size: 14px; font-family: inherit;
+    resize: vertical; line-height: 1.5;
+  }
+  textarea { min-height: 110px; }
+  textarea:focus, input[type=text]:focus { outline: none; border-color: #d8b46a; }
+  input[type=range] { width: 100%; accent-color: #d8b46a; height: 6px; }
+
+  .export-btn {
+    width: 100%; padding: 15px;
+    background: #2f8b3c; color: #fff;
+    border: none; border-radius: 11px;
+    font-size: 16px; font-weight: 700; font-family: inherit;
+    cursor: pointer; letter-spacing: -0.3px;
+  }
+  .export-btn:active { opacity: 0.85; }
+
+  /* ── 결과 캔버스 ── */
+  .stage {
+    width: 100%; max-width: 520px;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.6);
+    background: #000;
+  }
+  canvas#main { width: 100%; display: block; }
+
+  .hint { font-size: 11px; color: #6a6452; text-align: center; line-height: 1.7; max-width: 520px; }
+
+  /* SVG 필터는 화면에 보이지 않게 숨김 */
+  .svgdefs { position: absolute; width: 0; height: 0; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<header>🎨 유화 노트 합성기</header>
+
+<!-- ───────── 컨트롤 패널 ───────── -->
+<details class="panel" open>
+  <summary>⚙️ 설정 패널</summary>
+  <div class="panel-body">
+    <div class="field">
+      <label>본문 (손글씨로 채워짐)</label>
+      <textarea id="bodyInput">오랜만에 책을 펼친다. 활자를 읽는다는 건 누군가의 마음을 더듬는 일이라서, 한 문장 한 문장 천천히 따라가다 보면 어느새 내 안의 작은 방에 불이 켜진다. 오늘은 그 불빛에 기대어 몇 줄을 적어두기로 한다. 잊고 싶지 않은 장면들, 다시 돌아오고 싶은 마음, 그리고 오른손이 기억하는 펜의 무게까지. 종이는 말이 없지만 가장 오래 들어주는 친구다. 그래서 나는 또 쓴다.</textarea>
+    </div>
+    <div class="field">
+      <label>강조 제목</label>
+      <input type="text" id="titleInput" value="오른손에게">
+    </div>
+    <div class="field">
+      <label>본문 글자 크기 <span class="val" id="fsVal">34</span></label>
+      <input type="range" id="fsSlider" min="22" max="56" value="34">
+    </div>
+    <div class="field">
+      <label>좌측 페이지 여백 <span class="val" id="lmVal">10%</span></label>
+      <input type="range" id="lmSlider" min="4" max="20" value="10">
+    </div>
+    <div class="field">
+      <label>우측 페이지 여백 <span class="val" id="rmVal">10%</span></label>
+      <input type="range" id="rmSlider" min="4" max="20" value="10">
+    </div>
+    <div class="field">
+      <label>유화 동화 강도 (displacement) <span class="val" id="dpVal">4</span></label>
+      <input type="range" id="dpSlider" min="0" max="10" value="4">
+    </div>
+    <button class="export-btn" id="exportBtn">PNG로 내보내기 ↓</button>
+  </div>
+</details>
+
+<div class="stage">
+  <canvas id="main" width="1600" height="2100"></canvas>
+</div>
+
+<div class="hint">
+  배경 유화는 <b>assets/base.png</b>를 사용합니다. 파일이 없으면 임시 파스텔 배경으로 대체됩니다.<br>
+  텍스트는 유화 위에 "함께 칠해진 것처럼" 가장자리 일렁임·음영·색감 통일 후처리가 적용됩니다.
+</div>
+
+<!-- ───────── 유화 동화용 SVG 필터 ───────── -->
+<!-- feTurbulence로 노이즈를 만들고, feDisplacementMap으로 글자 윤곽을 물감처럼 일렁이게 함.
+     feSpecularLighting(135° 좌상단 광원)으로 약한 물감 두께감(음영)을 더함.
+     scale 값은 JS에서 슬라이더로 실시간 변경. -->
+<svg class="svgdefs" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="oilFilter" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap id="dispNode" in="SourceGraphic" in2="noise" scale="4"
+                         xChannelSelector="R" yChannelSelector="G" result="disp"/>
+      <!-- 글자 알파를 높이맵으로 보고 약한 하이라이트 생성 -->
+      <feGaussianBlur in="disp" stdDeviation="0.7" result="height"/>
+      <feSpecularLighting in="height" surfaceScale="1.4" specularConstant="0.45"
+                          specularExponent="16" lighting-color="#ffffff" result="spec">
+        <feDistantLight azimuth="135" elevation="58"/>
+      </feSpecularLighting>
+      <!-- 하이라이트를 글자 모양 안으로만 제한 -->
+      <feComposite in="spec" in2="disp" operator="in" result="specIn"/>
+      <!-- 원본 displaced + 약한 하이라이트 합성 -->
+      <feComposite in="disp" in2="specIn" operator="arithmetic"
+                   k1="0" k2="1" k3="0.30" k4="0" result="lit"/>
+      <feMerge><feMergeNode in="lit"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<script>
+/* =========================================================================
+   유화 노트 합성기
+   레이어(아래→위): ① 배경 base.png  ② 본문 손글씨  ③ 강조 제목  ④ 워터마크
+   ②③은 offscreen에 그린 뒤 SVG 필터로 "유화 동화" 후처리 후 합성.
+   ========================================================================= */
+
+const W = 1600, H = 2100;                 // 내보내기 해상도 (캔버스 실제 픽셀)
+const main = document.getElementById('main');
+const mctx = main.getContext('2d');
+
+// ── DOM 핸들 ──
+const bodyInput  = document.getElementById('bodyInput');
+const titleInput = document.getElementById('titleInput');
+const fsSlider   = document.getElementById('fsSlider'),  fsVal = document.getElementById('fsVal');
+const lmSlider   = document.getElementById('lmSlider'),  lmVal = document.getElementById('lmVal');
+const rmSlider   = document.getElementById('rmSlider'),  rmVal = document.getElementById('rmVal');
+const dpSlider   = document.getElementById('dpSlider'),  dpVal = document.getElementById('dpVal');
+const exportBtn  = document.getElementById('exportBtn');
+const dispNode   = document.getElementById('dispNode');  // displacement scale 노드
+
+// ── 상태 ──
+let baseImg = null;        // 배경 이미지(있으면)
+let baseReady = false;     // base.png 로드 성공 여부
+
+/* -------------------------------------------------------------------------
+   결정적 난수 (mulberry32) — 같은 입력이면 같은 손글씨 흔들림이 나오도록 시드 고정.
+   reseed()로 매 렌더 시작 시 초기화.
+   ------------------------------------------------------------------------- */
+let _seed = 12345;
+function reseed(s){ _seed = s >>> 0; }
+function rnd(){
+  _seed |= 0; _seed = (_seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const rndRange = (a, b) => a + (b - a) * rnd();
+
+/* -------------------------------------------------------------------------
+   배경 그리기.
+   base.png가 있으면 cover로 꽉 채워 그리고, 없으면 fallback 임파스토 배경.
+   → 배경 색감/구도를 바꾸려면 assets/base.png 교체.
+   ------------------------------------------------------------------------- */
+function drawBackground(ctx){
+  if (baseReady && baseImg){
+    // cover 스케일 계산
+    const scale = Math.max(W / baseImg.width, H / baseImg.height);
+    const dw = baseImg.width * scale, dh = baseImg.height * scale;
+    ctx.drawImage(baseImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  } else {
+    drawFallbackBackground(ctx);
+  }
+}
+
+/* base.png 부재 시 임시 배경: 파스텔 임파스토 필드 + 가운데 크림색 펼친 책.
+   회전된 둥근 사각형 수백 개 + 그림자로 물감 덩어리를 흉내. */
+function drawFallbackBackground(ctx){
+  reseed(999);
+  // 바탕 그라데이션
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#d9c3d6'); g.addColorStop(0.5, '#e7d2c2'); g.addColorStop(1, '#ccd9d2');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  const pastel = [
+    '#ffb3b9','#abdcc3','#ffd6b4','#bad2eb','#ffecbe',
+    '#d2bee6','#c8e6d2','#ffc8af','#f0d2dc','#afdcdc'
+  ];
+  // 임파스토 덩어리
+  for (let i = 0; i < 600; i++){
+    const x = rnd() * W, y = rnd() * H;
+    const w = rndRange(30, 130), h = rndRange(18, 70);
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rndRange(0, Math.PI));
+    ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+    roundRect(ctx, -w/2, -h/2, w, h, Math.min(w,h)/2);
+    ctx.fillStyle = pastel[(rnd()*pastel.length)|0];
+    ctx.globalAlpha = rndRange(0.55, 0.9);
+    ctx.fill();
+    ctx.restore();
+  }
+  // 가운데 펼친 책(크림 페이지 두 장)
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+  ctx.fillStyle = '#f3ead8';
+  roundRect(ctx, W*0.07, H*0.15, W*0.86, H*0.70, 24); ctx.fill();
+  ctx.restore();
+  // 가운데 접힘선
+  ctx.strokeStyle = 'rgba(150,120,110,0.35)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(W*0.5, H*0.16); ctx.lineTo(W*0.5, H*0.84); ctx.stroke();
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+}
+
+/* -------------------------------------------------------------------------
+   펜이 놓인 사선 영역 — 이 띠 안의 글자는 그리지 않아 펜을 자연스럽게 피함.
+   기준 좌표는 base.png(펼친 책+만년필) 구도에 맞춤. 펜 위치가 다르면 PEN 수정.
+   ------------------------------------------------------------------------- */
+const PEN = {
+  x1: W*0.42, y1: H*0.86,   // 좌하단
+  x2: W*0.80, y2: H*0.44,   // 우상단
+  half: W*0.055             // 띠 반폭
+};
+function inPenBand(px, py){
+  const dx = PEN.x2 - PEN.x1, dy = PEN.y2 - PEN.y1;
+  const len2 = dx*dx + dy*dy;
+  let t = ((px - PEN.x1)*dx + (py - PEN.y1)*dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = PEN.x1 + t*dx, cy = PEN.y1 + t*dy;
+  return Math.hypot(px - cx, py - cy) < PEN.half;
+}
+
+/* -------------------------------------------------------------------------
+   본문 손글씨 — 좌/우 두 페이지 영역을 흐르며 채움.
+   글자색/베이스라인/회전/자간을 미세 랜덤으로 흔들어 손글씨 느낌.
+   반환: 본문을 그린 offscreen canvas (투명 배경).
+   ------------------------------------------------------------------------- */
+function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+
+  reseed(20240601 + text.length + fontSize); // 입력 의존 시드
+
+  const top = H*0.20, bottom = H*0.80;
+  const gutter = W*0.03;                      // 가운데 접힘 여백
+  const lineH = fontSize * 1.55;
+
+  // 좌/우 페이지 영역 (여백 슬라이더로 가로 폭 조절)
+  const regions = [
+    { left: W*(leftMargin/100),  right: W*0.5 - gutter },
+    { left: W*0.5 + gutter,      right: W*(1 - rightMargin/100) }
+  ];
+
+  let ri = 0;
+  let x = regions[0].left;
+  let y = top + lineH;
+  const spaceW = fontSize * 0.32;
+
+  for (const ch of text){
+    const reg = regions[ri];
+
+    if (ch === '\n'){
+      x = reg.left; y += lineH;
+      if (y > bottom){ ri++; if (ri >= regions.length) break; y = top + lineH; x = regions[ri].left; }
+      continue;
+    }
+
+    const cw = (ch === ' ') ? spaceW : ctx.measureText(ch).width;
+
+    // 줄바꿈
+    if (x + cw > reg.right){
+      x = reg.left; y += lineH;
+      if (y > bottom){ ri++; if (ri >= regions.length) break; y = top + lineH; x = regions[ri].left; }
+    }
+
+    if (ch !== ' '){
+      const jx = x + rndRange(-1, 1);
+      const jy = y + rndRange(-2, 2);              // 베이스라인 ±2px
+      if (!inPenBand(jx, jy)){                     // 펜 사선 영역은 건너뜀
+        const gray = 95 + Math.round(rndRange(0, 15)); // #5f→#6e 사이
+        ctx.save();
+        ctx.translate(jx, jy);
+        ctx.rotate(rndRange(-0.026, 0.026));        // 약 ±1.5°
+        ctx.fillStyle = `rgb(${gray},${gray-4},${gray-8})`;
+        ctx.fillText(ch, 0, 0);
+        ctx.restore();
+      }
+    }
+    x += cw + rndRange(-0.5, 1.5);                 // 자간 미세 랜덤
+  }
+  return c;
+}
+
+/* -------------------------------------------------------------------------
+   강조 제목 — 하단 중앙, Gaegu 굵게, 초록(#2f8b3c) + 밑줄 + 약한 그림자.
+   반환: 제목 offscreen canvas.
+   ------------------------------------------------------------------------- */
+function renderTitleLayer(title){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  const fs = W * 0.075;                 // 제목 크기
+  ctx.font = `700 ${fs}px 'Gaegu', cursive`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const cx = W * 0.5, cy = H * 0.875;
+  const tw = ctx.measureText(title).width;
+
+  // 그림자 (종이 위에 얹힌 느낌)
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 2; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#2f8b3c';
+  ctx.fillText(title, cx, cy);
+
+  // 밑줄 (글자폭에 맞춤)
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = '#2f8b3c';
+  ctx.lineWidth = fs * 0.06;
+  ctx.lineCap = 'round';
+  const uy = cy + fs * 0.55;
+  ctx.beginPath();
+  ctx.moveTo(cx - tw/2, uy);
+  ctx.lineTo(cx + tw/2, uy);
+  ctx.stroke();
+
+  return c;
+}
+
+/* -------------------------------------------------------------------------
+   캔버스 천 텍스처 — 색감 통일용. base.png가 있으면 흐릿하게 깔아 색감 차용,
+   없으면 노이즈 생성. overlay blend, opacity 0.15로 전체에 덮음.
+   ------------------------------------------------------------------------- */
+function makeClothTexture(){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  if (baseReady && baseImg){
+    const scale = Math.max(W / baseImg.width, H / baseImg.height);
+    const dw = baseImg.width*scale, dh = baseImg.height*scale;
+    ctx.filter = 'blur(8px)';
+    ctx.drawImage(baseImg, (W-dw)/2, (H-dh)/2, dw, dh);
+    ctx.filter = 'none';
+  } else {
+    const id = ctx.createImageData(W, H);
+    for (let i = 0; i < id.data.length; i += 4){
+      const v = 110 + ((Math.random()*60)|0);
+      id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255;
+    }
+    ctx.putImageData(id, 0, 0);
+  }
+  return c;
+}
+
+/* -------------------------------------------------------------------------
+   메인 렌더 파이프라인.
+   ------------------------------------------------------------------------- */
+function render(){
+  const fontSize = +fsSlider.value;
+  const lm = +lmSlider.value, rm = +rmSlider.value;
+  const dp = +dpSlider.value;
+  dispNode.setAttribute('scale', dp);   // 유화 동화 강도
+
+  // ① 배경
+  drawBackground(mctx);
+
+  // ② 본문 — offscreen → SVG 필터(일렁임+음영) → multiply 0.88로 종이에 스며들게
+  const bodyLayer = renderBodyLayer(bodyInput.value, fontSize, lm, rm);
+  mctx.save();
+  mctx.globalAlpha = 0.88;
+  mctx.globalCompositeOperation = 'multiply';
+  mctx.filter = dp > 0 ? 'url(#oilFilter)' : 'none';
+  mctx.drawImage(bodyLayer, 0, 0);
+  mctx.restore();
+
+  // ③ 제목 — 같은 동화 필터, 일반 합성(또렷하게)
+  const titleLayer = renderTitleLayer(titleInput.value);
+  mctx.save();
+  mctx.filter = dp > 0 ? 'url(#oilFilter)' : 'none';
+  mctx.drawImage(titleLayer, 0, 0);
+  mctx.restore();
+
+  // ④ 색감 통일 텍스처 overlay
+  mctx.save();
+  mctx.globalAlpha = 0.15;
+  mctx.globalCompositeOperation = 'overlay';
+  mctx.drawImage(makeClothTexture(), 0, 0);
+  mctx.restore();
+
+  // ⑤ 워터마크 (좌하단)
+  mctx.save();
+  mctx.globalAlpha = 0.6;
+  mctx.fillStyle = '#ffffff';
+  mctx.font = `${W*0.022}px -apple-system, sans-serif`;
+  mctx.textAlign = 'left'; mctx.textBaseline = 'bottom';
+  mctx.fillText('✦ AI로 생성한 콘텐츠', W*0.03, H - W*0.025);
+  mctx.restore();
+}
+
+/* 입력 변경 시 디바운스 렌더 */
+let renderTimer = null;
+function scheduleRender(){
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 80);
+}
+
+/* 슬라이더 라벨 + 렌더 바인딩 */
+fsSlider.addEventListener('input', () => { fsVal.textContent = fsSlider.value; scheduleRender(); });
+lmSlider.addEventListener('input', () => { lmVal.textContent = lmSlider.value + '%'; scheduleRender(); });
+rmSlider.addEventListener('input', () => { rmVal.textContent = rmSlider.value + '%'; scheduleRender(); });
+dpSlider.addEventListener('input', () => { dpVal.textContent = dpSlider.value; scheduleRender(); });
+bodyInput.addEventListener('input', scheduleRender);
+titleInput.addEventListener('input', scheduleRender);
+
+/* PNG 내보내기 — 캔버스(1600×2100)만 저장, 패널은 미포함 */
+exportBtn.addEventListener('click', () => {
+  render(); // 최신 상태 보장
+  main.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '유화노트.png'; a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+});
+
+/* -------------------------------------------------------------------------
+   초기화: base.png 로드 시도 → 폰트 로드 → 렌더(여러 시점에서 안전 재호출).
+   ------------------------------------------------------------------------- */
+function init(){
+  baseImg = new Image();
+  baseImg.onload  = () => { baseReady = true;  render(); };
+  baseImg.onerror = () => { baseReady = false; render(); }; // 없으면 fallback
+  baseImg.src = 'assets/base.png';
+
+  if (document.fonts && document.fonts.ready){
+    document.fonts.ready.then(render);
+    setTimeout(render, 1500); // 폰트가 늦어도 강제 렌더
+  }
+  render();
+}
+init();
+</script>
+</body>
+</html>
