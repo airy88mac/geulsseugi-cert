@@ -517,34 +517,48 @@
       const bodyH = h - titleH;
       const t = grainIntensity / 60;
 
-      // ① 2단계 블러: 큰 블러 위에 더 큰 블러를 반투명 합성 → 글자 완전 파괴
-      const b1 = blurredCanvas(image, w, h, 20 + t * 25);
-      const b2 = blurredCanvas(image, w, h, 40 + t * 40);
-      targetCtx.drawImage(b1, 0, titleH, w, bodyH, 0, titleH, w, bodyH);
-      targetCtx.save();
-      targetCtx.globalAlpha = 0.55;
-      targetCtx.drawImage(b2, 0, titleH, w, bodyH, 0, titleH, w, bodyH);
-      targetCtx.restore();
+      // ① 가벼운 블러로 텍스트 엣지 먼저 녹임
+      const blurred = blurredCanvas(image, w, h, 6 + t * 10);
+      targetCtx.drawImage(blurred, 0, titleH, w, bodyH, 0, titleH, w, bodyH);
 
-      // ② 채도 부스트 + 아주 미세한 결 노이즈
-      const bodyData = targetCtx.getImageData(0, titleH, w, bodyH);
-      const d = bodyData.data;
-      const sat = 1.4 + t * 1.0; // 채도 강화 → 물감처럼 선명한 색
-      const swing = 5 + t * 7;
-      let xs = (Date.now() ^ (w * titleH)) | 1;
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i], g = d[i+1], b = d[i+2];
-        const avg = (r + g + b) / 3;
-        d[i]   = Math.max(0, Math.min(255, avg + (r - avg) * sat));
-        d[i+1] = Math.max(0, Math.min(255, avg + (g - avg) * sat));
-        d[i+2] = Math.max(0, Math.min(255, avg + (b - avg) * sat));
+      // ② 파스텔 유화 붓터치 패치 덮기
+      const colors = [
+        [255,179,185], // 핑크
+        [171,220,195], // 민트
+        [255,214,180], // 피치
+        [186,210,235], // 하늘
+        [255,236,190], // 크림
+        [210,190,230], // 라벤더
+        [200,230,210], // 연두
+        [255,200,175], // 살구
+      ];
+
+      // 이미지 크기 기반 고정 시드 → 렌더링마다 패턴 동일
+      let xs = (w * 1000 + h) | 1;
+      function sr() {
         xs ^= xs << 13; xs ^= xs >> 17; xs ^= xs << 5;
-        const n = ((xs >>> 0) / 0xffffffff - 0.5) * 2 * swing;
-        d[i]   = Math.max(0, Math.min(255, d[i]   + n));
-        d[i+1] = Math.max(0, Math.min(255, d[i+1] + n));
-        d[i+2] = Math.max(0, Math.min(255, d[i+2] + n));
+        return (xs >>> 0) / 0xffffffff;
       }
-      targetCtx.putImageData(bodyData, 0, titleH);
+
+      const numStrokes = Math.floor(120 + t * 200);
+      for (let i = 0; i < numStrokes; i++) {
+        const cx   = sr() * w;
+        const cy   = titleH + sr() * bodyH;
+        const rx   = (15 + sr() * 55) * (0.6 + t * 0.6);
+        const ry   = (10 + sr() * 35) * (0.6 + t * 0.6);
+        const ang  = sr() * Math.PI;
+        const alpha = 0.25 + sr() * 0.35;
+        const [r, g, b] = colors[Math.floor(sr() * colors.length)];
+
+        targetCtx.save();
+        targetCtx.translate(cx, cy);
+        targetCtx.rotate(ang);
+        targetCtx.beginPath();
+        targetCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        targetCtx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        targetCtx.fill();
+        targetCtx.restore();
+      }
     }
 
     drawComment(targetCtx, image, w, h, titleH);
