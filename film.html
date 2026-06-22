@@ -114,6 +114,10 @@
       <input type="range" id="rmSlider" min="4" max="20" value="10">
     </div>
     <div class="field">
+      <label>책 기울기 보정 (°) <span class="val" id="rotVal">0</span></label>
+      <input type="range" id="rotSlider" min="-8" max="8" step="0.5" value="0">
+    </div>
+    <div class="field">
       <label>유화 동화 강도 (displacement) <span class="val" id="dpVal">2</span></label>
       <input type="range" id="dpSlider" min="0" max="10" value="2">
     </div>
@@ -179,6 +183,7 @@ const fsSlider   = document.getElementById('fsSlider'),  fsVal = document.getEle
 const lmSlider   = document.getElementById('lmSlider'),  lmVal = document.getElementById('lmVal');
 const rmSlider   = document.getElementById('rmSlider'),  rmVal = document.getElementById('rmVal');
 const dpSlider   = document.getElementById('dpSlider'),  dpVal = document.getElementById('dpVal');
+const rotSlider  = document.getElementById('rotSlider'), rotVal = document.getElementById('rotVal');
 const exportBtn  = document.getElementById('exportBtn');
 const dispNode   = document.getElementById('dispNode');  // displacement scale 노드
 
@@ -205,12 +210,22 @@ const rndRange = (a, b) => a + (b - a) * rnd();
    base.png가 있으면 cover로 꽉 채워 그리고, 없으면 fallback 임파스토 배경.
    → 배경 색감/구도를 바꾸려면 assets/base.png 교체.
    ------------------------------------------------------------------------- */
-function drawBackground(ctx){
+function drawBackground(ctx, bookAngleDeg){
   if (baseReady && baseImg){
     // CROP 영역(책 부분)만 잘라 캔버스 전체에 채움 (배경 대부분 제거)
     const sx = CROP.x * baseImg.width,  sy = CROP.y * baseImg.height;
     const sw = CROP.w * baseImg.width,  sh = CROP.h * baseImg.height;
+    // 책 기울기 보정: 중심 기준 회전 + 살짝 확대(빈 모서리 방지)
+    ctx.save();
+    if (bookAngleDeg){
+      const over = 1.18;   // 회전 시 모서리 빈공간 안 생기게 확대
+      ctx.translate(W/2, H/2);
+      ctx.rotate(bookAngleDeg * Math.PI / 180);
+      ctx.scale(over, over);
+      ctx.translate(-W/2, -H/2);
+    }
     ctx.drawImage(baseImg, sx, sy, sw, sh, 0, 0, W, H);
+    ctx.restore();
   } else {
     drawFallbackBackground(ctx);
   }
@@ -404,10 +419,11 @@ function render(){
   const fontSize = +fsSlider.value;
   const lm = +lmSlider.value, rm = +rmSlider.value;
   const dp = +dpSlider.value;
+  const rot = +rotSlider.value;
   dispNode.setAttribute('scale', dp);   // 유화 동화 강도
 
-  // ① 배경
-  drawBackground(mctx);
+  // ① 배경 (책 기울기 보정 회전 적용)
+  drawBackground(mctx, rot);
 
   // ② 본문 — 수평 손글씨 → SVG 동화 필터 + multiply 0.88로 종이에 스며들게
   const bodyLayer = renderBodyLayer(bodyInput.value, fontSize, lm, rm);
@@ -454,6 +470,7 @@ fsSlider.addEventListener('input', () => { fsVal.textContent = fsSlider.value; s
 lmSlider.addEventListener('input', () => { lmVal.textContent = lmSlider.value + '%'; scheduleRender(); });
 rmSlider.addEventListener('input', () => { rmVal.textContent = rmSlider.value + '%'; scheduleRender(); });
 dpSlider.addEventListener('input', () => { dpVal.textContent = dpSlider.value; scheduleRender(); });
+rotSlider.addEventListener('input', () => { rotVal.textContent = rotSlider.value; scheduleRender(); });
 bodyInput.addEventListener('input', scheduleRender);
 titleInput.addEventListener('input', scheduleRender);
 
