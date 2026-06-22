@@ -168,6 +168,10 @@
 
 const W = 1600, H = 1200;                 // 내보내기 해상도 (base.png 4:3 비율)
 
+/* 본문 손글씨 폰트 스택. DX경필바탕이 (로컬 설치 or 임베드되어) 있으면 우선 사용,
+   없으면 Nanum Pen Script로 폴백. 이름 표기 변형도 함께 시도. */
+const BODY_FONT = `'DX경필바탕', 'DXGyeongpilBatang', 'DX Gyeongpil Batang', 'Nanum Pen Script', cursive`;
+
 /* 배경 이미지(base.png)에서 쓸 영역 (이미지 비율 0~1).
    새 이미지는 책이 이미 수평이고 프레임을 꽉 채우므로 전체 사용.
    다른 이미지를 쓰면 이 값만 조정. */
@@ -305,7 +309,7 @@ const BODY = { top: 0.155, bottom: 0.83, gutter: 0.035 };
    가독성을 위해 글자는 수평. 손글씨 느낌은 색/베이스라인/자간 미세 랜덤으로만. */
 function layoutBody(text, fontSize, leftMargin, rightMargin, measureCtx, draw){
   reseed(20240601 + text.length + fontSize);
-  measureCtx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+  measureCtx.font = `${fontSize}px ${BODY_FONT}`;
 
   const top = H*BODY.top, bottom = H*BODY.bottom;
   const lineH = fontSize * 1.5;
@@ -362,7 +366,7 @@ function renderBodyLayer(text, fontSize, leftMargin, rightMargin){
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  ctx.font = `${fontSize}px 'Nanum Pen Script', cursive`;
+  ctx.font = `${fontSize}px ${BODY_FONT}`;
   ctx.textBaseline = 'alphabetic';
   layoutBody(text, fontSize, leftMargin, rightMargin, ctx, ctx);
   return c;
