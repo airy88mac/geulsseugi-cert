@@ -550,11 +550,24 @@ function render(){
   mctx.restore();
 }
 
+/* 캔버스에 쓸 폰트를 명시적으로 먼저 로드한다.
+   Safari는 아직 로드 안 된 폰트로 캔버스 텍스트를 그리면 폴백하지 않고 '빈 글자'로
+   그려버린다. 캔버스 사용만으로는 웹폰트 로딩이 트리거되지 않으므로 직접 load 호출. */
+function ensureFontsLoaded(){
+  if (!(document.fonts && document.fonts.load)) return Promise.resolve();
+  const specs = ['16px "Nanum Pen Script"', '700 16px "Gaegu"'];
+  if (selectedBodyFont)  specs.push(`16px "${selectedBodyFont}"`);
+  if (selectedTitleFont) specs.push(`700 16px "${selectedTitleFont}"`);
+  return Promise.all(specs.map(s => document.fonts.load(s).catch(()=>{})));
+}
+/* 폰트 로드 보장 후 렌더 */
+function renderWithFonts(){ ensureFontsLoaded().then(render); }
+
 /* 입력 변경 시 디바운스 렌더 */
 let renderTimer = null;
 function scheduleRender(){
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(render, 80);
+  renderTimer = setTimeout(renderWithFonts, 80);
 }
 
 /* 슬라이더 라벨 + 렌더 바인딩 */
@@ -572,10 +585,7 @@ titleColorInput.addEventListener('input', scheduleRender);
 function applyFont(which, family){
   if (which === 'body'){ selectedBodyFont = family; bodyFontVal.textContent = family || '기본'; }
   else { selectedTitleFont = family; titleFontVal.textContent = family || '기본'; }
-  if (family && document.fonts && document.fonts.load){
-    document.fonts.load(`24px "${family}"`).then(render).catch(()=>{});
-  }
-  scheduleRender();
+  scheduleRender();   // 폰트 로드 보장 후 렌더 (ensureFontsLoaded 경유)
 }
 bodyFontInput.addEventListener('input',  () => applyFont('body',  bodyFontInput.value.trim()));
 titleFontInput.addEventListener('input', () => applyFont('title', titleFontInput.value.trim()));
@@ -620,15 +630,12 @@ exportBtn.addEventListener('click', () => {
    ------------------------------------------------------------------------- */
 function init(){
   baseImg = new Image();
-  baseImg.onload  = () => { baseReady = true;  render(); };
-  baseImg.onerror = () => { baseReady = false; render(); }; // 없으면 fallback
+  baseImg.onload  = () => { baseReady = true;  renderWithFonts(); };
+  baseImg.onerror = () => { baseReady = false; renderWithFonts(); }; // 없으면 fallback
   baseImg.src = 'assets/base.png';
 
-  if (document.fonts && document.fonts.ready){
-    document.fonts.ready.then(render);
-    setTimeout(render, 1500); // 폰트가 늦어도 강제 렌더
-  }
-  render();
+  renderWithFonts();              // 폰트 로드 보장 후 첫 렌더
+  setTimeout(renderWithFonts, 1500); // 폰트가 늦게 와도 강제 재렌더
 }
 init();
 </script>
