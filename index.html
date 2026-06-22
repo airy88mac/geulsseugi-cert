@@ -536,13 +536,13 @@
         return (xs >>> 0) / 0xffffffff;
       }
 
-      // 레이어1: 큰 패치 — 배경을 파스텔로 채움
-      const bigCount = Math.floor(60 + t * 80);
+      // 레이어1: 큰 패치 — 바탕을 파스텔로 단단히 채움 (거의 불투명)
+      const bigCount = Math.floor(50 + t * 60);
       for (let i = 0; i < bigCount; i++) {
         const cx  = sr() * w;
         const cy  = titleH + sr() * bodyH;
-        const rx  = 40 + sr() * 90;
-        const ry  = 25 + sr() * 55;
+        const rx  = 45 + sr() * 95;
+        const ry  = 28 + sr() * 58;
         const ang = sr() * Math.PI;
         const [r, g, b] = colors[Math.floor(sr() * colors.length)];
         targetCtx.save();
@@ -550,18 +550,18 @@
         targetCtx.rotate(ang);
         targetCtx.beginPath();
         targetCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.55 + t * 0.25})`;
+        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.82 + sr() * 0.15})`;
         targetCtx.fill();
         targetCtx.restore();
       }
 
-      // 레이어2: 작은 패치 — 붓 질감
-      const smallCount = Math.floor(150 + t * 250);
+      // 레이어2: 작은 패치 — 뚜렷한 붓터치 질감
+      const smallCount = Math.floor(120 + t * 180);
       for (let i = 0; i < smallCount; i++) {
         const cx  = sr() * w;
         const cy  = titleH + sr() * bodyH;
-        const rx  = 8 + sr() * 32;
-        const ry  = 5 + sr() * 18;
+        const rx  = 8 + sr() * 30;
+        const ry  = 5 + sr() * 16;
         const ang = sr() * Math.PI;
         const [r, g, b] = colors[Math.floor(sr() * colors.length)];
         targetCtx.save();
@@ -569,7 +569,7 @@
         targetCtx.rotate(ang);
         targetCtx.beginPath();
         targetCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.45 + sr() * 0.35})`;
+        targetCtx.fillStyle = `rgba(${r},${g},${b},${0.80 + sr() * 0.18})`;
         targetCtx.fill();
         targetCtx.restore();
       }
